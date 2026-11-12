@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { scoreCaptures } from "./score.mjs";
 import { evidenceFrame } from "../export/evidence.mjs";
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character],
   );

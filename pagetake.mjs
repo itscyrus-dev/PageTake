@@ -7,6 +7,10 @@ import { parseArgs } from "node:util";
 import { defaultChrome, launchChrome } from "./src/capture/chrome.mjs";
 import { publicUrl, recordNetwork, replayNetwork } from "./src/capture/archive.mjs";
 import { compareCaptures } from "./src/compare/compare.mjs";
+import { readVerifyPlan } from "./src/compare/verify-plan.mjs";
+import { captureVerificationSide } from "./src/compare/verify-browser.mjs";
+import { referenceFrameIssues, writeVerificationReport } from "./src/compare/verify-report.mjs";
+import { loadVerificationBaseline, saveVerificationBaseline } from "./src/compare/verify-baseline.mjs";
 import { generateProject } from "./src/generate.mjs";
 import { exportProject } from "./src/export/export.mjs";
 import { writeGuide } from "./src/export/guide.mjs";
@@ -20,12 +24,15 @@ const usage = `Usage
   node pagetake.mjs record <URL> <new-dir> [--seconds 20] [--width 1440] [--height 900]
   node pagetake.mjs replay <recording-dir> [--seconds 20]
   node pagetake.mjs compare <recording-dir> <candidate-dir> [--output compare.html]
+  node pagetake.mjs baseline <plan.json> <new-dir> [--no-headless] [--chrome <path>]
+  node pagetake.mjs verify <plan.json> <new-dir> [--baseline <dir>] [--no-headless] [--chrome <path>]
   node pagetake.mjs inspect <candidate-URL> <new-dir> [--seconds 20]
   node pagetake.mjs export <recording-dir> <new-project-dir>
   node pagetake.mjs guide <recording-dir> <export-dir>
   node pagetake.mjs generate <recording-dir> <new-project-dir> [--base-url URL --model NAME | --prompt-only]
 Options
   --headless              Run Chrome in the background
+  --baseline <dir>        Use a saved reference for verification
   --scroll <range>        full, manual, 800:2400, or a CSS selector
   --samples 3             Number of page samples (maximum 12)
   --actions <file>        Capture an interaction plan after page sampling
@@ -49,7 +56,7 @@ const options = {
   "prompt-only": { type: "boolean" }, feedback: { type: "string" }, candidate: { type: "string" },
   scroll: { type: "string" }, match: { type: "string" },
   actions: { type: "string" }, watch: { type: "string" }, "reduced-motion": { type: "boolean" },
-  canvas: { type: "string" }, "js-motion": { type: "boolean" },
+  baseline: { type: "string" }, canvas: { type: "string" }, "js-motion": { type: "boolean" },
 };
 
 function integer(value, fallback, min, max, name) {
@@ -192,6 +199,7 @@ async function main() {
   const { values, positionals } = parseArgs({ options, allowPositionals: true, allowNegative: true });
   const [command, first, second] = positionals;
   if (values.help || !command) return console.log(usage);
+  if (values.baseline !== undefined && command !== "verify") throw new Error("--baseline is only valid with verify");
   if (command === "record" && first && second && positionals.length === 3) {
     const url = publicUrl(first);
     if (!url) throw new Error("Use a public HTTP(S) URL without credentials or signed parameters");
@@ -267,6 +275,29 @@ async function main() {
         console.log(output);
       },
     });
+    return;
+  }
+  if (["baseline", "verify"].includes(command) && first && second && positionals.length === 3) {
+    const plan = await readVerifyPlan(first, { referenceOnly: command === "baseline" });
+    const output = resolve(second);
+    const executable = values.chrome ?? process.env.CHROME_PATH ?? defaultChrome;
+    await mkdir(output);
+    const reference = values.baseline === undefined
+      ? await captureVerificationSide(plan, "reference", output, executable, values.headless)
+      : await loadVerificationBaseline(plan, resolve(values.baseline), output);
+    if (command === "baseline") {
+      await saveVerificationBaseline(plan, output, reference);
+      const blocked = reference.sections.flat().filter((state) =>
+        state.error || state.frames.some((frame) => referenceFrameIssues(frame, plan).length)).length;
+      console.log(`Baseline: ${join(output, "baseline.json")} · ${blocked} blocked states`);
+      if (blocked) process.exitCode = 1;
+      return;
+    }
+    const candidate = await captureVerificationSide(plan, "candidate", output, executable, values.headless);
+    const summary = await writeVerificationReport(plan, output, reference, candidate);
+    console.log(`Coverage ${summary.evaluated}/${summary.planned} (${summary.coveragePercent}%) · ${summary.passed} passed · ${summary.failed} failed · ${summary.blocked} blocked`);
+    console.log(`Report: ${join(output, "verify.html")}`);
+    if (summary.passed !== summary.planned) process.exitCode = 1;
     return;
   }
   if (command === "compare" && first && second && positionals.length === 3) {

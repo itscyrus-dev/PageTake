@@ -15,6 +15,8 @@ const usage = `Usage
   ./pagetake clone <URL> <project>       Record and export a page
   ./pagetake open <project> [version]    Start the preview (default: source)
   ./pagetake score <project> [version]   Capture and score a preview (default: source)
+  ./pagetake baseline <plan> <new-dir>  Save a verification reference
+  ./pagetake verify <plan> <new-dir>    Compare states [--baseline <dir>]
   ./pagetake ai <project> [version]      Generate a draft with the model from .env
   ./pagetake export <project>            Export an existing recording
   ./pagetake guide <project> [version]   Generate guides for an existing export
@@ -98,6 +100,12 @@ async function main() {
   if (!command || ["help", "--help", "-h"].includes(command)) {
     console.log(usage);
     return;
+  }
+  if (["baseline", "verify"].includes(command) && first && second) {
+    const flags = args.map((arg, index) => args[index - 1] === "--baseline" && !arg.startsWith("--") ? resolve(arg)
+      : arg.startsWith("--baseline=") && arg.length > "--baseline=".length ? "--baseline=" + resolve(arg.slice("--baseline=".length))
+      : arg);
+    return cli(command, resolve(first), resolve(second), ...flags);
   }
   if (command === "clone") {
     if (!first || !second) throw new Error("Usage: ./pagetake clone <URL> <project>");
