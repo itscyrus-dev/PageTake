@@ -183,7 +183,7 @@ npm ci
 npm test
 ```
 
-CI runs the Node.js 24 suite with Chrome on Ubuntu and macOS. See
+CI runs the Node.js 24 suite with Chrome on Ubuntu. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.
 
 To prepare a release, update `package.json` and `package-lock.json` together

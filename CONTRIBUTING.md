@@ -14,7 +14,7 @@ commits. For bug reports, share the command, expected and observed behavior,
 Node and Chrome versions, and a minimal public reproduction when available.
 
 Open a pull request for changes to `main`. Resolve review conversations and
-pass the Ubuntu and macOS CI checks before merging. GitHub deletes the head
+pass the Ubuntu `verify` check before merging. GitHub deletes the head
 branch after the pull request is merged. Use descriptive PR titles such as
 `feat: add ...`, `fix: correct ...`, or `docs: explain ...` to help group
 changes in release notes.
