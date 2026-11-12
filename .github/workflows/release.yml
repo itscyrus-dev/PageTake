@@ -8,10 +8,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: release-${{ github.ref_name }}
-  cancel-in-progress: false
-
 jobs:
   test:
     uses: ./.github/workflows/ci.yml
@@ -21,9 +17,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -38,7 +31,6 @@ jobs:
         run: |
           version="$(node -p 'require("./package.json").version')"
           test "$GITHUB_REF_NAME" = "v$version"
-          git merge-base --is-ancestor HEAD origin/main
           archive="pagetake-$version.tar.gz"
           checksum="$archive.sha256"
           git archive --format=tar.gz --prefix="pagetake-$version/" -o "$archive" HEAD
@@ -46,23 +38,16 @@ jobs:
           echo "file=$archive" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
       - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" "$RUNNER_TEMP/release-notes.md"
       - name: Publish to GitHub Releases
         env:
+          GH_TOKEN: ${{ github.token }}
           ARCHIVE: ${{ steps.archive.outputs.file }}
           CHECKSUM: ${{ steps.archive.outputs.checksum }}
         shell: bash
         run: |
-          if draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null)"; then
-            if [ "$draft" != true ]; then
-              echo "Release $GITHUB_REF_NAME is already published."
-              exit 0
-            fi
-            gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
-          else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
-              --title "PageTake $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
-          fi
-          sha256sum -c "$CHECKSUM"
-          gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" "$CHECKSUM" --clobber
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          gh release create "$GITHUB_REF_NAME" --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --title "PageTake $GITHUB_REF_NAME" "$ARCHIVE" "$CHECKSUM"
