@@ -1,9 +1,8 @@
 # PageTake
 
-PageTake records public pages in Chrome, replays captured responses offline,
-and exports a standalone preview with screenshots, interaction states, motion
-timelines, and an asset inventory. Use it to inspect how a page works or
-compare an implementation against recorded evidence.
+PageTake records public web pages and exports a local reference bundle with
+screenshots, interaction states, motion timelines, and assets. Hand the bundle
+to your coding agent to implement the design in your own project.
 
 ## Requirements
 
@@ -13,15 +12,41 @@ compare an implementation against recorded evidence.
 
 ```sh
 npm ci
-./wr help
+./pagetake help
 ```
 
-## Quick start
+## Capture and hand off to a coding agent
+
+1. From the PageTake checkout, record the reference.
+
+   ```sh
+   ./pagetake clone https://example.com/ example
+   ```
+
+2. From the destination project, install the PageTake Skill for your agent.
+   The installer lets you choose which coding agent to install it for.
+
+   ```sh
+   npx skills add itscyrus-dev/PageTake --skill pagetake
+   ```
+
+3. Give the agent the path to `recordings/example/source` in your PageTake
+   checkout, or copy that directory to a location the agent can read. For
+   example, ask it to use PageTake to implement the recorded workflow section
+   in the current project and verify it at the recorded viewport. The bundle's
+   `manifest/agent.json` points to the evidence. Agents can also use the
+   bundle's `AGENTS.md` and `guide/page.md` directly.
+
+The destination agent uses its own model access. The Skill installs workflow
+instructions. For a new capture, use the PageTake checkout and browser
+requirements above.
+
+### Preview and capture options
 
 ```sh
-./wr clone https://example.com/ example
-./wr open example
-./wr score example --headless
+./pagetake clone https://example.com/ example
+./pagetake open example
+./pagetake score example --headless
 ```
 
 `clone` scrolls from the top to the bottom over 60 seconds and captures six
@@ -31,12 +56,11 @@ for a selector, or `--scroll manual` to control the browser yourself.
 
 | Command | Result |
 | --- | --- |
-| `./wr clone <URL> <project>` | Capture into `recordings/<project>/reference` and export into `source` |
-| `./wr open <project> [version]` | Serve a preview locally. The default version is `source` |
-| `./wr score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
-| `./wr export <project>` | Export an existing recording into a new `source` directory |
-| `./wr guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
-| `./wr ai <project> [version]` | Generate an independent draft using an API-compatible model |
+| `./pagetake clone <URL> <project>` | Capture into `recordings/<project>/reference` and export into `source` |
+| `./pagetake open <project> [version]` | Serve a preview locally. The default version is `source` |
+| `./pagetake score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
+| `./pagetake export <project>` | Export an existing recording into a new `source` directory |
+| `./pagetake guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
 
 Choose a fresh project name for each capture. Set `PAGETAKE_DIR` to change the
 local recordings directory. Use the lower-level export command to write an
@@ -45,7 +69,7 @@ existing capture to another directory.
 ## Capture motion and interactions
 
 ```sh
-./wr clone http://127.0.0.1:8080/ workflow --headless --seconds 12 --samples 4 \
+./pagetake clone http://127.0.0.1:8080/ workflow --headless --seconds 12 --samples 4 \
   --js-motion --watch '#counter,.sticky-panel' --actions actions.json
 ```
 
@@ -147,6 +171,7 @@ Start with `guide/page.md` for the section map.
 
 | File under `manifest/` | Contents |
 | --- | --- |
+| `agent.json` | Entry points, evidence paths, screenshot indexes, verified states, and capture coverage. Paths are relative to the export root |
 | `page.json` | Capture viewport, browser, and sample positions |
 | `motion-manifest.json` | CSS and browser animations, keyframes, observed values, and collection limits |
 | `js-motion.json` | Opt-in JavaScript frame activity and watched samples |
@@ -161,11 +186,12 @@ New runtime evidence requires a fresh capture. Capture only covers loaded
 public resources. Media byte coverage describes the bytes that were stored,
 and browser media metadata is available only after it loads.
 
-## Generate an editable draft
+## Optional model-backed draft
 
-Copy `.env.example` to `.env` and set the model endpoint, model name, and API
-key locally using the `PAGETAKE_*` variables. Existing `WEB_REPLAY_*` settings
-are also accepted. Then run `./wr ai example` and `./wr open example draft`.
+Existing users of `./pagetake ai example` can set `PAGETAKE_BASE_URL`,
+`PAGETAKE_MODEL`, and `PAGETAKE_API_KEY` in their environment or local `.env`
+file. Existing `WEB_REPLAY_*` settings are also accepted. Open the generated
+draft with `./pagetake open example draft`.
 `--prompt-only` saves the prompt locally for inspection. The tool sends
 capture evidence to the configured model endpoint only when you request a
 model generation call.

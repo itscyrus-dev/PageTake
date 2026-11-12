@@ -10,6 +10,8 @@ Read that project's instructions and examine its existing components first.
   change the port.
 - Start with the [page map](guide/page.md). Its section guides show the DOM
   outline, matching layout measurements, assets, and screenshots.
+- Use the [agent manifest](manifest/agent.json) to locate evidence. Its file
+  paths are relative to this export directory.
 - Use `routes.json` to map browser requests to files in `resources/`.
   Review the [missing evidence report](manifest/missing.json) for gaps.
 - Check animations and interactions at their recorded positions. Where

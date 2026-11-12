@@ -286,6 +286,7 @@ export async function writeGuide(recordingPath, outputPath, { packaged = false }
     ...(samples.length ? samples.map((sample) => `- ${sampleLine(folder, screenshotDir, sample)}`) : ["This archive contains no screenshot samples."]),
     ...(packaged ? [
       "", "## Structured evidence", "",
+      "- [Agent manifest](../manifest/agent.json)",
       "- [Motion timeline](../manifest/motion-manifest.json) · [Interaction states and action frames](../manifest/interactions.json) · [Computed styles and SVG geometry](../manifest/styles.json)",
       "- [Assets and media](../manifest/assets.json) · [Missing evidence](../manifest/missing.json) · [Viewport and sample positions](../manifest/page.json)",
       ...(manifest.motion?.js || manifest.motion?.canvasClip || manifest.actions?.some(({ clip, state }) => clip || state)

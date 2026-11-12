@@ -65,7 +65,8 @@ export async function writeEvidence(recording, output, archive, files) {
   const escape = (value) => String(value).replace(/[&<>"']/g, (char) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const unavailable = actions.filter(({ state }) => stateName.test(state ?? "") && !states.some(({ name }) => name === state));
-  if (states.length || unavailable.length || clips.length || motion?.js) {
+  const hasEvidenceViewer = !!(states.length || unavailable.length || clips.length || motion?.js);
+  if (hasEvidenceViewer) {
     const links = states.map(({ name }) => `<li><a href="../?state=${name}">${name}</a></li>`).join("");
     const videos = clips.map((clip) => `<figure><figcaption>${escape(clip.selector)}</figcaption>${
       clip.file ? `<video controls playsinline preload="metadata" src="${clip.file}"></video>` : `<p>${escape(clip.error)}</p>`}</figure>`).join("");
@@ -95,6 +96,14 @@ export async function writeEvidence(recording, output, archive, files) {
   const frameData = ({ screenshot, elapsedMs, scrollY, viewport, observation, phase, error }) => ({
     frame: copiedFrames.has(screenshot) ? "frames/" + screenshot : null, elapsedMs, scrollY, viewport, observation, phase, error,
   });
+  const samples = archive.samples ?? [];
+  const screenshotIndex = (samples) => samples.filter(({ screenshot }) => copiedFrames.has(screenshot))
+    .map(({ screenshot, elapsedMs, scrollY, viewport, phase }) => ({
+      path: "manifest/frames/" + screenshot, elapsedMs, scrollY, viewport, phase,
+    }));
+  const pageScreenshots = screenshotIndex(samples);
+  const observedPositions = samples.map(({ scrollY }) => scrollY).filter(Number.isFinite);
+  const motionStatus = motion?.error ? "capture-error" : motion ? "observed" : "legacy";
   const assets = [];
   const mediaByUrl = new Map();
   const observedSources = new Set((motion?.media ?? []).map(({ source }) => source).filter(Boolean));
@@ -131,7 +140,7 @@ export async function writeEvidence(recording, output, archive, files) {
       recordedAt: archive.recordedAt, samples: (archive.samples ?? []).map(frameData),
     }),
     write("motion-manifest", {
-      status: motion?.error ? "capture-error" : motion ? "observed" : "legacy",
+      status: motionStatus,
       error: motion?.error, clock: motion?.clock, intervalMs: motion?.intervalMs, reducedMotion: motion?.reducedMotion,
       css: motion?.css, animations: motion?.animations ?? [], surfaces: motion?.surfaces, limitsReached: motion?.dropped,
       legacySamples: motion && !motion.error ? undefined : archive.samples?.map(({ elapsedMs, scrollY, animations }) =>
@@ -155,6 +164,37 @@ export async function writeEvidence(recording, output, archive, files) {
       missingFrames: [...new Set(
         frames.filter(({ screenshot }) => !copiedFrames.has(screenshot)).map(({ screenshot }) => screenshot),
       )],
+    }),
+    write("agent", {
+      pathBase: "export-root",
+      sourceUrl: archive.url,
+      entrypoints: {
+        instructions: "AGENTS.md", pageMap: "guide/page.md", html: "index.html", preview: "serve.mjs", routes: "routes.json",
+      },
+      evidence: {
+        page: "manifest/page.json", motion: "manifest/motion-manifest.json", interactions: "manifest/interactions.json",
+        styles: "manifest/styles.json", assets: "manifest/assets.json", missing: "manifest/missing.json",
+        ...(states.length ? { states: "manifest/states.json" } : {}),
+        ...(clips.length ? { canvasClips: "manifest/canvas-clips.json" } : {}),
+        ...(motion?.js ? { jsMotion: "manifest/js-motion.json" } : {}),
+        ...(hasEvidenceViewer ? { viewer: "manifest/evidence.html" } : {}),
+      },
+      coverage: {
+        viewport: archive.viewport ?? null, devicePixelRatio: archive.devicePixelRatio ?? null,
+        scroll: archive.scroll ?? null,
+        sampledScrollY: observedPositions.length
+          ? { min: Math.min(...observedPositions), max: Math.max(...observedPositions) } : null,
+        pageSamples: samples.length, pageScreenshots: pageScreenshots.length,
+        actions: actions.length, failedActions: actions.filter(({ error }) => error).length,
+        motionStatus, reducedMotion: motion?.reducedMotion ?? null,
+      },
+      screenshots: {
+        page: pageScreenshots,
+        actions: actions.map(({ type, selector, frames, error }, index) => ({
+          index: index + 1, type, selector, frames: screenshotIndex(frames), error,
+        })),
+      },
+      verifiedStates: states.map(({ name }) => ({ name, previewQuery: "?state=" + name })),
     }),
   ]);
 }

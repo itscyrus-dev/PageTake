@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -59,6 +59,22 @@ test("Export a standalone project with local aliases for CDN routes", async () =
     const hero = await readFile(join(project.output, "guide", "01-hero.md"), "utf8");
     assert.match(hero, /button · Upload/);
     assert.doesNotMatch(hero, /privateBootstrap|Product demo/);
+    const moved = join(root, "moved");
+    await rename(project.output, moved);
+    await rm(archive, { recursive: true });
+    const agent = JSON.parse(await readFile(join(moved, "manifest", "agent.json"), "utf8"));
+    assert.equal(agent.version, 1);
+    assert.equal(agent.pathBase, "export-root");
+    assert.equal(agent.sourceUrl, "https://test.example/");
+    assert.equal(agent.coverage.motionStatus, "legacy");
+    assert.equal(agent.coverage.sampledScrollY, null);
+    assert.deepEqual(agent.screenshots, { page: [], actions: [] });
+    assert.deepEqual(agent.verifiedStates, []);
+    assert.equal(agent.evidence.viewer, undefined);
+    for (const path of [...Object.values(agent.entrypoints), ...Object.values(agent.evidence)]) {
+      assert.doesNotMatch(path, /^(?:\/|\.\.\/)/);
+      await access(join(moved, path));
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

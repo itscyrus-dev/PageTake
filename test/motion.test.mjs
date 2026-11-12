@@ -101,6 +101,20 @@ test("Export motion, Canvas clips, and verified states and control preview clock
     const missing = await readJson(output, "manifest/missing.json");
     assert.ok(missing.network.some(({ url, reason, detail }) => url.endsWith("/missing.json") && reason === "http-error" && detail === 404));
     const interactions = await readJson(output, "manifest/interactions.json");
+    const agent = await readJson(output, "manifest/agent.json");
+    assert.deepEqual(agent.verifiedStates, [{ name: "show-panel", previewQuery: "?state=show-panel" }]);
+    assert.deepEqual(agent.coverage.viewport, { width: 390, height: 844 });
+    assert.equal(agent.coverage.pageScreenshots, 1);
+    assert.equal(agent.coverage.failedActions, 0);
+    assert.equal(agent.coverage.motionStatus, "observed");
+    assert.equal(agent.evidence.jsMotion, "manifest/js-motion.json");
+    assert.equal(agent.evidence.canvasClips, "manifest/canvas-clips.json");
+    assert.equal(agent.evidence.states, "manifest/states.json");
+    assert.equal(agent.evidence.viewer, "manifest/evidence.html");
+    assert.deepEqual(agent.screenshots.actions[0].frames.map(({ phase }) => phase), ["before", 0, 25, 50, 75, 100]);
+    for (const { path } of [...agent.screenshots.page, ...agent.screenshots.actions[0].frames]) {
+      assert.ok((await readFile(join(output, path))).length > 100);
+    }
     assert.equal(interactions.stateLinks[0].url, "/?state=show-panel");
     const canvas = await readJson(output, "manifest/canvas-clips.json");
     assert.deepEqual(canvas.clips.map(({ file, width, height }) => [file, width, height]),

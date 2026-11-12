@@ -117,7 +117,7 @@ export async function exportProject(recording, requestedOutput) {
   await writeGuide(folder, output, { packaged: true });
   await writeFile(join(output, "README.md"),
     "# Exported page\n\nRun `node serve.mjs` and open the printed URL.\n\n" +
-    "Start with the [page map](guide/page.md) and [integration guide](AGENTS.md). " +
+    "Start with the [page map](guide/page.md), [agent manifest](manifest/agent.json), and [integration guide](AGENTS.md). " +
     "The browser uses captured resources. Missing routes return HTTP 404. Confirm you have permission before redistributing captured content.\n");
   return { output, count: routes.length, entry: entryRoute };
 }
