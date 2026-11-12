@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -36,6 +37,11 @@ jobs:
           sha256sum "$archive" > "$checksum"
           echo "file=$archive" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" "$RUNNER_TEMP/release-notes.md"
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,5 +49,5 @@ jobs:
           CHECKSUM: ${{ steps.archive.outputs.checksum }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+          gh release create "$GITHUB_REF_NAME" --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" \
             --title "PageTake $GITHUB_REF_NAME" "$ARCHIVE" "$CHECKSUM"
