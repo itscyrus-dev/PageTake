@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { writeGuide } from "./guide.mjs";
 import { writeEvidence } from "./evidence.mjs";
 import { writeSceneEvidence } from "./scenes.mjs";
+import { writeDesign } from "./design.mjs";
 
 const textual = /^(?:text\/|application\/(?:javascript|json|[^;]+\+json)|image\/svg\+xml)/i;
 const extensions = {
@@ -123,7 +124,13 @@ export async function exportProject(recording, requestedOutput) {
     const { origin } = new URL(entry.url);
     if (!origins.has(origin)) origins.set(origin, `/__archive/origin-${origins.size}`);
   }
-  await mkdir(output);
+  await mkdir(dirname(output), { recursive: true });
+  try {
+    await mkdir(output);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    throw new Error(`Export destination already exists: ${output}. Choose a new destination to export again.`, { cause: error });
+  }
   await mkdir(join(output, "resources"));
   const aliases = aliasesFor(origins);
   const routes = [];
@@ -170,9 +177,10 @@ export async function exportProject(recording, requestedOutput) {
     : ""));
   await writeEvidence(folder, output, archive, files, scenes);
   await writeGuide(folder, output, { packaged: true, scenes });
+  await writeDesign(output, archive, scenes);
   await writeFile(join(output, "README.md"),
     "# Exported page\n\nRun `node serve.mjs` and open the printed URL.\n\n" +
-    "Start with the [page map](guide/page.md), [agent manifest](manifest/agent.json), and [integration guide](AGENTS.md). " +
+    "Use the [design reference](design.md) to extend the style across pages. Start with the [page map](guide/page.md), [agent manifest](manifest/agent.json), and [integration guide](AGENTS.md) to implement a recorded section. " +
     (scenes ? "For animated backgrounds and Canvas evidence, see the [scene guide](guide/scenes.md). " : "") +
     "The browser uses captured resources. Missing routes return HTTP 404. Confirm you have permission before redistributing captured content.\n");
   return { output, count: routes.length, entry: entryRoute };

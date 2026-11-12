@@ -23,7 +23,7 @@ test("Recorded CSS, scripts, JSON, and Canvas work after the origin stops", { ti
   const server = createServer((request, response) => {
     const resources = {
       "/": ["text/html; charset=utf-8", '<!doctype html><title>Loading</title><link rel="stylesheet" href="/style.css"><main><section><h1>Motion demo</h1><canvas width="180" height="90"></canvas><div class="tile"></div></section></main><script src="/app.js"></script>'],
-      "/style.css": ["text/css", ".tile{width:40px;height:40px;background:red;animation:move 2s linear infinite}@keyframes move{to{transform:translateX(140px)}}"],
+      "/style.css": ["text/css", "body{background:#fafafa;font-family:Arial,sans-serif}h1{color:#123456;font-size:36px}.tile{width:40px;height:40px;background:red;animation:move 2s linear infinite}@keyframes move{to{transform:translateX(140px)}}"],
       "/app.js": ["text/javascript", 'fetch("/data.json").then(r=>r.json()).then(data=>document.title=data.title);const ctx=document.querySelector("canvas").getContext("2d");function draw(t){ctx.fillStyle="white";ctx.fillRect(0,0,180,90);ctx.fillStyle="blue";ctx.fillRect(t%140,0,40,40);requestAnimationFrame(draw)}requestAnimationFrame(draw);'],
       "/data.json": ["application/json", '{"title":"Replay verified"}'],
     };
@@ -50,6 +50,12 @@ test("Recorded CSS, scripts, JSON, and Canvas work after the origin stops", { ti
     assert.match(hero, /frame-01\.png/);
     assert.match(hero, /fontSize=/);
     assert.match(hero, /move · 2000 ms/);
+    const design = await readFile(join(output, "design.md"), "utf8");
+    assert.match(design, /Text color \| rgb\(18, 52, 86\) \| Motion demo/);
+    assert.match(design, /Surface color \| rgb\(250, 250, 250\) \| body/);
+    assert.match(design, /H1 \| Arial, sans-serif \| 36px/);
+    const agent = JSON.parse(await readFile(join(output, "manifest", "agent.json"), "utf8"));
+    assert.equal(agent.entrypoints.designGuide, "design.md");
     await run(process.execPath, [cli, "replay", recording, "--headless", "--seconds", "4", "--samples", "2", "--output", replay]);
     const report = JSON.parse(await readFile(join(replay, "report.json"), "utf8"));
     assert.ok(report.network.served >= 4);

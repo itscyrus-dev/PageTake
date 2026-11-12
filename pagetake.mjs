@@ -74,7 +74,7 @@ function integer(value, fallback, min, max, name) {
   return parsed;
 }
 
-async function sample(page, folder, screenshot, elapsedMs) {
+async function sample(page, folder, screenshot, elapsedMs, includeDesign) {
   const [{ data }, { result }] = await Promise.all([
     page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }),
     page.send("Runtime.evaluate", {
@@ -91,9 +91,8 @@ async function sample(page, folder, screenshot, elapsedMs) {
           }
           return "";
         };
-        const describe = (e) => {
+        const describe = (e, css = getComputedStyle(e)) => {
           const box = e.getBoundingClientRect();
-          const css = getComputedStyle(e);
           const properties = ["display", "gridTemplateColumns", "flexDirection", "gap", "padding", "fontSize", "lineHeight", "fontWeight", "borderRadius", "objectFit"];
           return {tag:e.tagName,box:[box.x,box.y,box.width,box.height].map(Math.round),
             label:clean(e.getAttribute("aria-label") ?? e.getAttribute("alt") ?? e.getAttribute("placeholder") ??
@@ -108,10 +107,34 @@ async function sample(page, folder, screenshot, elapsedMs) {
           return box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight &&
             box.right > 0 && box.left < innerWidth && !!sectionOf(element);
         }).slice(0,45);
+        const designRoles = "header,nav,footer,section,article,h1,h2,h3,h4,h5,h6,p,form,button,a,input,textarea,select,label,[role=button],[role=tab],[role=tablist],img,video,canvas";
+        const design = [];
+        const roleCounts = new Map();
+        for (const element of ${includeDesign} ? [document.body, ...document.querySelectorAll(designRoles)] : []) {
+          if (!element) continue;
+          const explicitRole = element.getAttribute("role");
+          const role = ["button", "tab", "tablist"].includes(explicitRole) ? explicitRole : element.tagName.toLowerCase();
+          const region = element.closest("header,nav,footer")?.tagName ?? "content";
+          const bucket = region + "/" + role;
+          if ((roleCounts.get(bucket) ?? 0) >= 8) continue;
+          const box = element.getBoundingClientRect();
+          if (box.width <= 0 || box.height <= 0 || box.bottom <= 0 || box.top >= innerHeight ||
+              box.right <= 0 || box.left >= innerWidth) continue;
+          const css = getComputedStyle(element);
+          if (!element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+          const item = describe(element, css);
+          const properties = ["fontFamily", "letterSpacing", "color", "backgroundColor"];
+          item.role = role;
+          item.label ||= clean(element.getAttribute("title") ?? (element.matches("h1,h2,h3,h4,h5,h6,p,a,label,[role=button]") ? element.textContent : ""));
+          for (const property of properties) item.css[property] = css[property];
+          design.push(item);
+          roleCounts.set(bucket, (roleCounts.get(bucket) ?? 0) + 1);
+        }
         return JSON.stringify({
         title: document.title, scrollY, viewport: [innerWidth, innerHeight],
         canvases: document.querySelectorAll("canvas").length,
-        layout: [...new Set([...layout, ...visibleDetails])].map(describe),
+        layout: [...new Set([...layout, ...visibleDetails])].map((element) => describe(element)),
+        design: ${includeDesign} ? design : undefined,
         videos: [...document.querySelectorAll("video")].slice(0, 30).map(v => ({
           playing: !v.paused, time: v.currentTime, muted: v.muted, loop: v.loop
         })),
@@ -163,9 +186,9 @@ async function runBrowser({ url, output, values, viewport, offline, configure, f
     console.log(scroller
       ? `Automatic scrolling and sampling will take about ${seconds} seconds. First screenshot in about ${Number((seconds / samples).toFixed(1))} seconds, then scrolling continues.`
       : `${offline ? "Replaying" : "Recording"} for ${seconds} seconds. You can interact with the browser.`);
-    async function take(screenshot, elapsedMs) {
+    async function take(screenshot, elapsedMs, includeDesign = false) {
       const observation = await motion.snapshot().catch((error) => ({ error: error.message }));
-      return { ...await sample(browser.page, output, screenshot, elapsedMs), observation };
+      return { ...await sample(browser.page, output, screenshot, elapsedMs, includeDesign), observation };
     }
     const started = Date.now();
     for (let index = 1; index <= samples; index++) {
@@ -173,7 +196,7 @@ async function runBrowser({ url, output, values, viewport, offline, configure, f
       if (scroller) await scroller.step(index, target);
       else await delay(Math.max(0, target - Date.now()));
       try {
-        capture.push(await take(`frame-${String(index).padStart(2, "0")}.png`, Date.now() - started));
+        capture.push(await take(`frame-${String(index).padStart(2, "0")}.png`, Date.now() - started, true));
       } catch (error) {
         capture.push({ elapsedMs: Date.now() - started, error: error.message });
       }

@@ -44,8 +44,10 @@ test("Export a standalone project with local aliases for CDN routes", async () =
   try {
     const archive = join(root, "archive");
     await fixture(archive);
-    const project = await exportProject(archive, join(root, "project"));
+    const destination = join(root, "exports", "project");
+    const project = await exportProject(archive, destination);
     assert.equal(project.count, 6);
+    await assert.rejects(exportProject(archive, destination), /Export destination already exists/);
     const markup = await readFile(join(project.output, "index.html"), "utf8");
     assert.match(markup, /src="\/_w\/2_+\/app\.js"/);
     assert.match(markup, /privateBootstrap\(\)/);

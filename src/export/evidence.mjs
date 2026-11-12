@@ -93,8 +93,8 @@ export async function writeEvidence(recording, output, archive, files, scenes) {
       }
     }
   }
-  const frameData = ({ screenshot, elapsedMs, scrollY, viewport, observation, phase, error }) => ({
-    frame: copiedFrames.has(screenshot) ? "frames/" + screenshot : null, elapsedMs, scrollY, viewport, observation, phase, error,
+  const frameData = ({ screenshot, elapsedMs, scrollY, viewport, observation, phase, error, layout, design }) => ({
+    frame: copiedFrames.has(screenshot) ? "frames/" + screenshot : null, elapsedMs, scrollY, viewport, observation, phase, error, layout, design,
   });
   const samples = archive.samples ?? [];
   const screenshotIndex = (samples) => samples.filter(({ screenshot }) => copiedFrames.has(screenshot))
@@ -169,7 +169,7 @@ export async function writeEvidence(recording, output, archive, files, scenes) {
       pathBase: "export-root",
       sourceUrl: archive.url,
       entrypoints: {
-        instructions: "AGENTS.md", pageMap: "guide/page.md", html: "index.html", preview: "serve.mjs", routes: "routes.json",
+        instructions: "AGENTS.md", designGuide: "design.md", pageMap: "guide/page.md", html: "index.html", preview: "serve.mjs", routes: "routes.json",
         ...(scenes ? { sceneGuide: scenes.guide } : {}),
       },
       evidence: {
