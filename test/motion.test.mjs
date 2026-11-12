@@ -130,7 +130,26 @@ test("Export motion, Canvas clips, and verified states and control preview clock
     await run(process.execPath, [cli, "inspect", base, compared, ...browser, "--actions", plan]);
     await run(process.execPath, [cli, "compare", recording, compared]);
     const scores = await readJson(compared, "compare.html.json");
-    assert.equal(scores.actions[0].comparable, 6);
+    const candidateReport = await readJson(compared, "report.json");
+    const referenceFrames = capture.actions[0].frames;
+    const candidateFrames = candidateReport.actions[0].frames;
+    assert.deepEqual(candidateFrames.map(({ phase }) => phase), referenceFrames.map(({ phase }) => phase));
+    assert.equal(scores.actions[0].total, referenceFrames.length);
+    for (const [index, frame] of scores.actions[0].frames.entries()) {
+      const timeDifference = Math.abs(referenceFrames[index].elapsedMs - candidateFrames[index].elapsedMs);
+      assert.equal(frame.reason, timeDifference > 300 ? "Sampling times differ by more than 300 ms" : undefined);
+    }
+    assert.ok(Number.isFinite(scores.actions[0].frames[0].visual));
+    // Control the elapsed times to test the scoring boundary independently of runner speed.
+    for (const [index, frame] of candidateFrames.entries()) frame.elapsedMs = referenceFrames[index].elapsedMs;
+    candidateFrames.at(-2).elapsedMs += 300;
+    candidateFrames.at(-1).elapsedMs += 301;
+    await writeFile(join(compared, "report.json"), JSON.stringify(candidateReport));
+    const alignedReport = join(compared, "aligned.html");
+    await run(process.execPath, [cli, "compare", recording, compared, "--output", alignedReport]);
+    const alignedScores = await readJson(compared, "aligned.html.json");
+    assert.equal(alignedScores.actions[0].comparable, 5);
+    assert.equal(alignedScores.actions[0].frames.at(-1).reason, "Sampling times differ by more than 300 ms");
     chrome = await launchChrome({ executable: process.env.CHROME_PATH ?? defaultChrome, headless: true, width: 390, height: 844 });
     await chrome.page.send("Page.navigate", { url: base + "?state=show-panel&motion=step&t=250&js=1" });
     const { result, exceptionDetails } = await chrome.page.send("Runtime.evaluate", {
