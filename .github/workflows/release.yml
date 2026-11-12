@@ -34,6 +34,10 @@ jobs:
           archive="pagetake-$version.tar.gz"
           checksum="$archive.sha256"
           git archive --format=tar.gz --prefix="pagetake-$version/" -o "$archive" HEAD
+          if tar -tzf "$archive" | grep -E '(^|/)(recording|recordings)/|(^|/)scenes/[^/]+/(scene\.json|runtime\.js|options\.json|assets/)'; then
+            echo "::error::The release archive contains recordings or a generated scene bundle."
+            exit 1
+          fi
           sha256sum "$archive" > "$checksum"
           echo "file=$archive" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"

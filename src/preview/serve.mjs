@@ -13,6 +13,13 @@ const imageVariants = new Map();
 const localOrigin = "http://127.0.0.1";
 
 function responsiveImage(url) {
+  const thumbnail = /^(\?imageMogr2(?:\/[^/?&#]+)*\/thumbnail\/)([1-9]\d*)x(?=[/&]|$)/.exec(url.search);
+  if (thumbnail) {
+    const [match, prefix, pixels] = thumbnail;
+    const width = Number(pixels);
+    if (!Number.isSafeInteger(width)) return null;
+    return { key: url.pathname + prefix + "{width}x" + url.search.slice(match.length), width };
+  }
   if (!url.pathname.endsWith("/_next/image")) return null;
   const params = new URLSearchParams(url.searchParams);
   const width = Number(params.get("w"));

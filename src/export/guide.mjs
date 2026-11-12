@@ -254,7 +254,7 @@ function sectionGuide(section, next, evidence) {
 }
 
 /** Build section guides from exported markup and available capture samples. */
-export async function writeGuide(recordingPath, outputPath, { packaged = false } = {}) {
+export async function writeGuide(recordingPath, outputPath, { packaged = false, scenes = null } = {}) {
   const recording = resolve(recordingPath);
   const output = resolve(outputPath);
   const folder = join(output, "guide");
@@ -273,7 +273,7 @@ export async function writeGuide(recordingPath, outputPath, { packaged = false }
     pageUrl: new URL(manifest.url), motion: packaged ? manifest.motion : undefined,
   };
   const globalMotion = animationLines(samples);
-  await mkdir(folder);
+  await mkdir(folder, { recursive: !!scenes });
   for (const [index, section] of sections.entries()) {
     await writeFile(join(folder, section.file), sectionGuide(section, sections[index + 1], evidence), { flag: "wx" });
   }
@@ -287,6 +287,7 @@ export async function writeGuide(recordingPath, outputPath, { packaged = false }
     ...(packaged ? [
       "", "## Structured evidence", "",
       "- [Agent manifest](../manifest/agent.json)",
+      ...(scenes ? ["- [Animated scene integration](scenes.md)"] : []),
       "- [Motion timeline](../manifest/motion-manifest.json) · [Interaction states and action frames](../manifest/interactions.json) · [Computed styles and SVG geometry](../manifest/styles.json)",
       "- [Assets and media](../manifest/assets.json) · [Missing evidence](../manifest/missing.json) · [Viewport and sample positions](../manifest/page.json)",
       ...(manifest.motion?.js || manifest.motion?.canvasClip || manifest.actions?.some(({ clip, state }) => clip || state)

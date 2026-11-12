@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { release } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { launchChrome } from "../capture/chrome.mjs";
+import { publicUrl } from "../capture/archive.mjs";
 import { cropViewport } from "./region-image.mjs";
 
 async function evaluate(page, fn, input) {
@@ -125,9 +126,9 @@ async function verificationScreenshot(page, viewport, headless) {
   };
 }
 
-async function captureFrame(page, screenshot, selector, expected, output, file, started, atMs) {
+async function captureFrame(page, screenshot, selector, layers, expected, output, file, started, atMs) {
   await delay(Math.max(0, started + atMs - performance.now()));
-  const observation = await evaluate(page, ({ selector, expected }) => {
+  const observation = await evaluate(page, ({ selector, layers, expected }) => {
     const matches = document.querySelectorAll(selector);
     if (matches.length !== 1) throw new Error("Section must match one element at capture time");
     const node = matches[0];
@@ -149,9 +150,61 @@ async function captureFrame(page, screenshot, selector, expected, output, file, 
       }
       return opacity > 0.05;
     }
+    const assets = new Map();
+    const nodes = document.createTreeWalker(node, NodeFilter.SHOW_ELEMENT);
+    function addAsset(kind, url) {
+      if (!url || url.length > 2000 || assets.size >= 32 || !URL.canParse(url, document.baseURI)) return;
+      const address = new URL(url, document.baseURI);
+      if (!["http:", "https:"].includes(address.protocol)) return;
+      assets.set(kind + address.href, { kind, url: address.href });
+    }
+    for (let i = 0, element = node; element && i < 160 && assets.size < 32; i++, element = nodes.nextNode()) {
+      if (element instanceof HTMLImageElement) addAsset("image", element.currentSrc || element.getAttribute("src"));
+      if (element instanceof HTMLVideoElement) addAsset("poster", element.getAttribute("poster"));
+      for (const match of getComputedStyle(element).backgroundImage.matchAll(/url\("([^"]+)"\)/g)) {
+        addAsset("background", match[1]);
+      }
+      if (element.localName === "use") {
+        const source = element.getAttribute("href") ?? element.getAttribute("xlink:href");
+        if (source && !source.startsWith("#")) addAsset("svg", source);
+      }
+    }
+    const animations = new Set(node.getAnimations({ subtree: true }));
+    const visualProperties = ["backgroundColor", "backgroundImage", "backgroundSize", "backgroundPosition",
+      "opacity", "filter", "backdropFilter", "maskImage", "clipPath", "mixBlendMode", "transform", "zIndex"];
+    const visualLayers = [{ id: "section", selector }, ...layers].map(({ id, selector, pseudo }) => {
+      let matches;
+      try {
+        matches = document.querySelectorAll(selector);
+      } catch {
+        return { id, selector, pseudo, error: "Invalid layer selector" };
+      }
+      if (matches.length !== 1) return { id, selector, pseudo, error: `Layer matched ${matches.length} elements` };
+      const layer = matches[0];
+      const css = getComputedStyle(layer, pseudo);
+      for (const match of css.backgroundImage.matchAll(/url\("([^"]+)"\)/g)) addAsset("background", match[1]);
+      if (id !== "section") for (const animation of layer.getAnimations()) animations.add(animation);
+      const canvases = layer instanceof HTMLCanvasElement ? [layer] : [...layer.querySelectorAll("canvas")].slice(0, 4);
+      return { id, selector, pseudo, styles: Object.fromEntries(visualProperties.map((key) => [key, css[key]])),
+        canvases: canvases.map((canvas) => ({ width: canvas.width, height: canvas.height })) };
+    });
+    if (visualLayers.some((layer) => layer.canvases?.length)) {
+      const resources = performance.getEntriesByType("resource").filter(({ name }) => /\.(?:json|wasm)(?:[?#]|$)/i.test(name));
+      for (const resource of resources.slice(0, 8)) addAsset("page resource", resource.name);
+    }
+    const videoNodes = node instanceof HTMLVideoElement ? [node] : [...node.querySelectorAll("video")].slice(0, 6);
+    const videos = videoNodes.map((video) => {
+      addAsset("video", video.currentSrc);
+      return { url: video.currentSrc || undefined, currentTime: video.currentTime, duration: Number.isFinite(video.duration) ? video.duration : null,
+        paused: video.paused, readyState: video.readyState };
+    });
     return {
       box: { x, y, width, height }, scroll: { x: scrollX, y: scrollY },
-      animations: node.getAnimations({ subtree: true }).slice(0, 24).map((animation) => {
+      visualLayers, videos,
+      assets: [...assets.values()],
+      inlineSvg: [...node.querySelectorAll("svg")].slice(0, 8).map((svg) => svg.outerHTML)
+        .filter((markup) => markup.length <= 8000),
+      animations: [...animations].slice(0, 24).map((animation) => {
         const effect = animation.effect;
         const timing = effect?.getTiming();
         return {
@@ -167,7 +220,14 @@ async function captureFrame(page, screenshot, selector, expected, output, file, 
         return { label, expected: visibleCount, actual, passed: actual === visibleCount };
       }),
     };
-  }, { selector, expected });
+  }, { selector, layers, expected });
+  observation.assets = observation.assets.flatMap(({ kind, url }) => {
+    const safe = publicUrl(url);
+    return safe ? [{ kind, url: safe }] : [];
+  });
+  for (const video of observation.videos) {
+    if (video.url) video.url = publicUrl(video.url) ?? undefined;
+  }
   const elapsedMs = Math.round(performance.now() - started);
   const bytes = await screenshot(observation.scroll);
   await writeFile(join(output, file), cropViewport(bytes, observation.box));
@@ -200,6 +260,7 @@ async function captureVerificationPage(plan, side, output, page, headless) {
   const sections = [];
   for (const [index, section] of plan.sections.entries()) {
     const selector = section.selectors[side];
+    const layers = (section.layers ?? []).map(({ id, selectors, pseudo }) => ({ id, selector: selectors[side], pseudo }));
     const states = [];
     sections.push(states);
     let unavailable;
@@ -227,7 +288,7 @@ async function captureVerificationPage(plan, side, output, page, headless) {
       for (const [frameIndex, atMs] of state.framesMs.entries()) {
         try {
           const file = `${side}-${index + 1}-${stateIndex + 1}-${frameIndex + 1}.png`;
-          result.frames.push(await captureFrame(page, screenshot, selector, expected, output, file, started, atMs));
+          result.frames.push(await captureFrame(page, screenshot, selector, layers, expected, output, file, started, atMs));
         } catch (error) {
           result.frames.push({ atMs, error: error.message });
         }

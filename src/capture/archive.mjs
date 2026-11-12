@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const maxResourceBytes = 20 * 1024 * 1024;
-const maxArchiveBytes = 300 * 1024 * 1024;
+export const maxResourceBytes = 20 * 1024 * 1024;
+export const maxArchiveBytes = 300 * 1024 * 1024;
 const bodylessStatus = new Set([204, 205, 304]);
 const privateQuery = /^(?:access_token|token|auth|authorization|api[_-]?key|secret|sig(?:nature)?|policy|key-pair-id|x-amz-.+|x-goog-.+)$/i;
 const excludedHeaders = /^(?:set-cookie2?|content-encoding|content-length|transfer-encoding|connection|keep-alive|proxy-.+|www-authenticate|report-to|nel|alt-svc)$/i;
@@ -20,7 +20,7 @@ function header(headers, name) {
   return Object.entries(headers ?? {}).find(([key]) => key.toLowerCase() === name)?.[1];
 }
 
-function headersForReplay(headers) {
+export function headersForReplay(headers) {
   return Object.entries(headers).flatMap(([name, value]) => {
     if (excludedHeaders.test(name)) return [];
     return String(value).split("\n").map((entry) => ({ name, value: entry }));
@@ -31,7 +31,7 @@ function requestKey(url, range = "") {
   return `${url}\n${range}`;
 }
 
-function digest(bytes) {
+export function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 

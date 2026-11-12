@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { publicUrl } from "../capture/archive.mjs";
+import { resourcePath } from "./verify-assets.mjs";
 
 const slug = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
@@ -36,6 +38,19 @@ export async function readVerifyPlan(file, { referenceOnly = false } = {}) {
       "Section IDs must be unique lowercase slugs");
     sectionIds.add(section.id);
     check(targets(section.selectors), `${section.id}: supply selectors for ${sides.join(" and ")}`);
+    const layers = section.layers ?? [];
+    const layerIds = new Set(["section"]);
+    check(Array.isArray(layers) && layers.length <= 8, `${section.id}: specify up to 8 visual layers`);
+    for (const layer of layers) {
+      check(typeof layer?.id === "string" && slug.test(layer.id) && !layerIds.has(layer.id) && targets(layer.selectors),
+        `${section.id}: visual layers require unique IDs and selectors`);
+      check(layer.pseudo === undefined || ["::before", "::after"].includes(layer.pseudo),
+        `${section.id}/${layer.id}: invalid pseudo-element`);
+      check(layer.referenceFiles === undefined || (plan.sourceExport && Array.isArray(layer.referenceFiles) &&
+        layer.referenceFiles.length <= 12 && layer.referenceFiles.every(resourcePath)),
+        `${section.id}/${layer.id}: referenceFiles require sourceExport and paths under resources/`);
+      layerIds.add(layer.id);
+    }
     check(Array.isArray(section.states) && section.states.length > 0 && section.states.length <= 12,
       `${section.id}: specify 1–12 states`);
     const stateIds = new Set();
@@ -56,5 +71,8 @@ export async function readVerifyPlan(file, { referenceOnly = false } = {}) {
       `${label}: invalid visibility assertion`);
     }
   }
-  return { ...plan, minVisual, maxSizeDelta, maxTimingDeltaMs, readyTimeoutMs, reducedMotion };
+  check(plan.sourceExport === undefined || (typeof plan.sourceExport === "string" && plan.sourceExport.trim()),
+    "sourceExport must be a directory path");
+  const sourceExport = plan.sourceExport && resolve(dirname(file), plan.sourceExport);
+  return { ...plan, minVisual, maxSizeDelta, maxTimingDeltaMs, readyTimeoutMs, reducedMotion, sourceExport };
 }

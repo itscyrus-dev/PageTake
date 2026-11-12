@@ -29,9 +29,9 @@ function mediaCoverage(entries) {
   return { status: coveredBytes === total ? "all-bytes-in-ranges" : "partial", totalBytes: total, coveredBytes };
 }
 
-export async function writeEvidence(recording, output, archive, files) {
+export async function writeEvidence(recording, output, archive, files, scenes) {
   const folder = join(output, "manifest");
-  await mkdir(folder);
+  await mkdir(folder, { recursive: true });
   const motion = archive.motion;
   const write = (name, value) => writeFile(join(folder, name + ".json"), JSON.stringify({ version: 1, ...value }, null, 2));
   const actions = archive.actions ?? [];
@@ -153,7 +153,7 @@ export async function writeEvidence(recording, output, archive, files) {
       stateLinks: states.map(({ name }) => ({ name, url: "/?state=" + name })),
     }),
     write("styles", { watchSelector: motion?.watchSelector, targets: motion?.styles ?? [] }),
-    write("assets", { assets, media }),
+    write("assets", { assets, media, repairs: archive.mediaRepairs }),
     write("missing", {
       networkDetailAvailable: Array.isArray(archive.networkIssues), omissions: archive.omissions,
       network: archive.networkIssues ?? [], networkLimitReached: archive.issueLimitReached,
@@ -170,10 +170,12 @@ export async function writeEvidence(recording, output, archive, files) {
       sourceUrl: archive.url,
       entrypoints: {
         instructions: "AGENTS.md", pageMap: "guide/page.md", html: "index.html", preview: "serve.mjs", routes: "routes.json",
+        ...(scenes ? { sceneGuide: scenes.guide } : {}),
       },
       evidence: {
         page: "manifest/page.json", motion: "manifest/motion-manifest.json", interactions: "manifest/interactions.json",
         styles: "manifest/styles.json", assets: "manifest/assets.json", missing: "manifest/missing.json",
+        ...(scenes ? { scenes: scenes.manifest } : {}),
         ...(states.length ? { states: "manifest/states.json" } : {}),
         ...(clips.length ? { canvasClips: "manifest/canvas-clips.json" } : {}),
         ...(motion?.js ? { jsMotion: "manifest/js-motion.json" } : {}),

@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const serve = fileURLToPath(new URL("../serve.mjs", import.meta.url));
 
-test("Preview serves a recorded image size for an uncaptured responsive variant", { timeout: 10000 }, async () => {
+test("Preview serves recorded Next.js and CDN image sizes for uncaptured variants", { timeout: 10000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), "pagetake-preview-"));
   let child;
   let lines;
@@ -20,6 +20,8 @@ test("Preview serves a recorded image size for an uncaptured responsive variant"
       { route: image + "&w=640", file: "640.svg", status: 200, type: "image/svg+xml" },
       { route: image + "&w=320", file: "320.svg", status: 200, type: "image/svg+xml" },
       { route: image + "&w=1024", file: "error.txt", status: 404, type: "text/plain" },
+      { route: "/hero.png?imageMogr2/format/webp/quality/85/thumbnail/640x", file: "640.svg", status: 200, type: "image/svg+xml" },
+      { route: "/hero.png?imageMogr2/format/webp/quality/85/thumbnail/320x", file: "320.svg", status: 200, type: "image/svg+xml" },
     ];
     await Promise.all([
       writeFile(join(root, "routes.json"), JSON.stringify({ routes })),
@@ -34,6 +36,8 @@ test("Preview serves a recorded image size for an uncaptured responsive variant"
       [image + "&w=320", 320],
       ["/_next/image?w=400&q=75&url=%2Fshortcut.png", 640],
       [image + "&w=1200", 640],
+      ["/hero.png?imageMogr2/format/webp/quality/85/thumbnail/400x", 640],
+      ["/hero.png?imageMogr2/format/webp/quality/85/thumbnail/1200x", 640],
     ]) {
       const response = await fetch(new URL(request, base));
       assert.equal(response.status, 200, request);
@@ -43,6 +47,8 @@ test("Preview serves a recorded image size for an uncaptured responsive variant"
     for (const request of [
       image + "&w=1024",
       image + "&w=invalid",
+      "/hero.png?imageMogr2/format/webp/quality/85/thumbnail/640x480",
+      "/hero.png?imageMogr2/format/webp/quality/90/thumbnail/640x",
       "/_next/image?url=%2Fmissing.png&q=75&w=400",
       "/_next/image?url=%2Fshortcut.png&q=90&w=400",
     ]) {
