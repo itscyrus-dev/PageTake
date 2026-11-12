@@ -186,11 +186,12 @@ npm test
 CI runs the Node.js 24 suite with Chrome on Ubuntu and macOS. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.
 
-To prepare a release, update `package.json` and `package-lock.json` together,
-commit the changes, then push the matching `v<version>` tag to your GitHub
-repository. The release workflow reruns CI, checks the tag against the
-package version, and publishes `pagetake-<version>.tar.gz` with a matching
-`.tar.gz.sha256` checksum file. See [GitHub Releases](https://github.com/itscyrus-dev/PageTake/releases)
+To prepare a release, update `package.json` and `package-lock.json` together
+in a pull request. After merging, tag the release commit on `main` as
+`v<version>` and push that tag. The release workflow reruns CI, verifies the
+version and commit, generates notes from the changes since the previous
+published release, and publishes the source archive and SHA-256 checksum.
+See [GitHub Releases](https://github.com/itscyrus-dev/PageTake/releases)
 for published builds.
 
 [MIT License](LICENSE)

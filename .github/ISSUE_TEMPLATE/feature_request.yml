@@ -1,0 +1,16 @@
+name: Feature request
+description: Describe a PageTake workflow that could be improved
+title: '[Feature]: '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and desired behavior
+      description: Describe the workflow, its current limitation, and the outcome you need.
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: Include a public fixture or sample CLI invocation if available.
