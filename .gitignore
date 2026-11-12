@@ -1,0 +1,11 @@
+/recording/
+/recordings/
+/node_modules/
+/coverage/
+/dist/
+.env
+.env.*
+!.env.example
+.npmrc
+.DS_Store
+*.tgz

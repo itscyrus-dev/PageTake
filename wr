@@ -1,0 +1,133 @@
+#!/usr/bin/env node
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+
+const tool = dirname(fileURLToPath(import.meta.url));
+const root = resolve(process.env.WEB_REPLAY_DIR ?? join(tool, "recordings"));
+
+const usage = `Usage
+  ./wr --version                  Print the version
+  ./wr clone <URL> <project>       Record and export a page
+  ./wr open <project> [version]    Start the preview (default: source)
+  ./wr score <project> [version]   Capture and score a preview (default: source)
+  ./wr ai <project> [version]      Generate a draft with the model from .env
+  ./wr export <project>            Export an existing recording
+  ./wr guide <project> [version]   Generate guides for an existing export
+Projects live in recordings/. Clone scrolls the full page by default.
+Use --scroll manual, --scroll 800:2400, or --scroll "#section" to change it.
+Use --actions <file> for interaction frames and named checkpoints.`;
+
+function validName(name) {
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(name ?? "")) {
+    throw new Error("Project and version names may contain letters, numbers, hyphens, and underscores");
+  }
+  return name;
+}
+
+function cli(...args) {
+  return run([join(tool, "web-replay.mjs"), ...args]);
+}
+
+async function run(args) {
+  const child = spawn(process.execPath, args, { stdio: "inherit", cwd: tool });
+  const [code, signal] = await once(child, "exit");
+  if (code !== 0) throw new Error(`Command exited (${signal ?? code})`);
+}
+
+async function startServer(project) {
+  const child = spawn(process.execPath, [join(tool, "serve.mjs"), project, "0"], {
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const lines = createInterface({ input: child.stdout });
+  try {
+    const url = await Promise.race([
+      once(lines, "line").then(([line]) => line),
+      once(child, "exit").then(() => { throw new Error("Preview server failed to start"); }),
+      delay(5000, undefined, { ref: false }).then(() => { throw new Error("Preview server startup timed out"); }),
+    ]);
+    if (!/^http:\/\/127\.0\.0\.1:\d+\/$/.test(url)) throw new Error("Preview server did not return a loopback URL");
+    return { url, close: () => child.kill() };
+  } catch (error) {
+    child.kill();
+    throw error;
+  } finally {
+    lines.close();
+  }
+}
+
+async function score(project, reference, version, args) {
+  if (args.some((arg) => arg !== "--headless")) throw new Error("score accepts only --headless");
+  const manifest = JSON.parse(await readFile(join(reference, "manifest.json"), "utf8"));
+  const { width, height } = manifest.viewport;
+  const seconds = manifest.durationSeconds ?? Math.max(2, Math.round(manifest.samples.at(-1).elapsedMs / 1000));
+  const positions = manifest.scroll && manifest.scroll !== "manual" ? ["--match", join(reference, "manifest.json")] : [];
+  const actionOptions = manifest.actions?.length ? ["--actions", join(reference, "actions.json")] : [];
+  const motionOptions = manifest.motion?.reducedMotion ? ["--reduced-motion"] : [];
+  if (manifest.motion?.watchSelector) motionOptions.push("--watch", manifest.motion.watchSelector);
+  const preview = await startServer(join(project, version));
+  try {
+    const reports = join(project, "reports");
+    await mkdir(reports, { recursive: true });
+    const folder = join(reports, `${version}-${Date.now()}`);
+    await cli("inspect", preview.url, folder,
+      "--width", String(width), "--height", String(height),
+      "--seconds", String(seconds), "--samples", String(manifest.samples.length), ...positions, ...actionOptions, ...motionOptions, ...args);
+    await cli("compare", reference, folder);
+    const result = JSON.parse(await readFile(join(folder, "compare.html.json"), "utf8"));
+    console.log(`Visual ${result.visual ?? "unscored"} / 100 · Motion ${result.motion ?? "unscored"} / 100 · comparable ${result.comparable} / ${result.total} frames`);
+    console.log(`Report: ${join(folder, "compare.html")}`);
+  } finally {
+    preview.close();
+  }
+}
+
+async function main() {
+  const [command, first, second, ...args] = process.argv.slice(2);
+  if (command === "--version") {
+    const { version } = JSON.parse(await readFile(join(tool, "package.json"), "utf8"));
+    console.log(version);
+    return;
+  }
+  if (!command || ["help", "--help", "-h"].includes(command)) {
+    console.log(usage);
+    return;
+  }
+  if (command === "clone") {
+    if (!first || !second) throw new Error("Usage: ./wr clone <URL> <project>");
+    const project = join(root, validName(second));
+    const reference = join(project, "reference");
+    await mkdir(root, { recursive: true });
+    await mkdir(project);
+    await cli("record", first, reference, "--seconds", "60", "--samples", "6", "--scroll", "full", ...args);
+    await cli("export", reference, join(project, "source"));
+    console.log(`Preview: ./wr open ${second}\nScore: ./wr score ${second}`);
+    return;
+  }
+  if (!["export", "guide", "open", "score", "ai"].includes(command)) throw new Error(usage);
+  const project = join(root, validName(first));
+  const reference = join(project, "reference");
+  if (command === "export") return cli("export", reference, join(project, "source"));
+  const versionIsOption = second?.startsWith("--");
+  const version = validName((versionIsOption ? undefined : second) ?? (command === "ai" ? "draft" : "source"));
+  const flags = versionIsOption ? [second, ...args] : args;
+  if (command === "guide") return cli("guide", reference, join(project, version));
+  if (command === "open") return run([join(tool, "serve.mjs"), join(project, version)]);
+  if (command === "score") return score(project, reference, version, flags);
+  if (command === "ai") {
+    const env = join(tool, ".env");
+    return run([`--env-file-if-exists=${env}`, join(tool, "web-replay.mjs"),
+      "generate", reference, join(project, version), ...flags]);
+  }
+}
+
+try {
+  await main();
+} catch (error) {
+  console.error(error.message);
+  process.exitCode = 1;
+}
