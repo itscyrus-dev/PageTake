@@ -6,11 +6,14 @@ import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { defaultChrome, launchChrome } from "./src/capture/chrome.mjs";
 import { publicUrl, recordNetwork, replayNetwork } from "./src/capture/archive.mjs";
+import { fillMedia } from "./src/capture/fill-media.mjs";
 import { compareCaptures } from "./src/compare/compare.mjs";
 import { readVerifyPlan } from "./src/compare/verify-plan.mjs";
 import { captureVerificationSide } from "./src/compare/verify-browser.mjs";
 import { referenceFrameIssues, writeVerificationReport } from "./src/compare/verify-report.mjs";
 import { loadVerificationBaseline, saveVerificationBaseline } from "./src/compare/verify-baseline.mjs";
+import { loadVerificationAssets } from "./src/compare/verify-assets.mjs";
+import { writeRepairChecklist } from "./src/compare/verify-repair.mjs";
 import { generateProject } from "./src/generate.mjs";
 import { exportProject } from "./src/export/export.mjs";
 import { writeGuide } from "./src/export/guide.mjs";
@@ -22,16 +25,19 @@ import { canvasCapture } from "./src/capture/clips.mjs";
 
 const usage = `Usage
   node pagetake.mjs record <URL> <new-dir> [--seconds 20] [--width 1440] [--height 900]
+  node pagetake.mjs fill-media <recording-dir> [--media-url <URL>]
   node pagetake.mjs replay <recording-dir> [--seconds 20]
   node pagetake.mjs compare <recording-dir> <candidate-dir> [--output compare.html]
   node pagetake.mjs baseline <plan.json> <new-dir> [--no-headless] [--chrome <path>]
   node pagetake.mjs verify <plan.json> <new-dir> [--baseline <dir>] [--no-headless] [--chrome <path>]
+  node pagetake.mjs repair <verify.json>
   node pagetake.mjs inspect <candidate-URL> <new-dir> [--seconds 20]
   node pagetake.mjs export <recording-dir> <new-project-dir>
   node pagetake.mjs guide <recording-dir> <export-dir>
   node pagetake.mjs generate <recording-dir> <new-project-dir> [--base-url URL --model NAME | --prompt-only]
 Options
   --headless              Run Chrome in the background
+  --media-url <URL>       Also recover an observed media URL with no recorded bytes
   --baseline <dir>        Use a saved reference for verification
   --scroll <range>        full, manual, 800:2400, or a CSS selector
   --samples 3             Number of page samples (maximum 12)
@@ -56,7 +62,7 @@ const options = {
   "prompt-only": { type: "boolean" }, feedback: { type: "string" }, candidate: { type: "string" },
   scroll: { type: "string" }, match: { type: "string" },
   actions: { type: "string" }, watch: { type: "string" }, "reduced-motion": { type: "boolean" },
-  baseline: { type: "string" }, canvas: { type: "string" }, "js-motion": { type: "boolean" },
+  baseline: { type: "string" }, "media-url": { type: "string", multiple: true }, canvas: { type: "string" }, "js-motion": { type: "boolean" },
 };
 
 function integer(value, fallback, min, max, name) {
@@ -155,7 +161,7 @@ async function runBrowser({ url, output, values, viewport, offline, configure, f
       scroll: values.scroll, match: positions, samples, headless: values.headless,
     });
     console.log(scroller
-      ? `Automatic scrolling and sampling will take about ${seconds} seconds.`
+      ? `Automatic scrolling and sampling will take about ${seconds} seconds. First screenshot in about ${Number((seconds / samples).toFixed(1))} seconds, then scrolling continues.`
       : `${offline ? "Replaying" : "Recording"} for ${seconds} seconds. You can interact with the browser.`);
     async function take(screenshot, elapsedMs) {
       const observation = await motion.snapshot().catch((error) => ({ error: error.message }));
@@ -200,6 +206,17 @@ async function main() {
   const [command, first, second] = positionals;
   if (values.help || !command) return console.log(usage);
   if (values.baseline !== undefined && command !== "verify") throw new Error("--baseline is only valid with verify");
+  if (values["media-url"] && command !== "fill-media") throw new Error("--media-url is only valid with fill-media");
+  if (command === "fill-media" && first && positionals.length === 2) {
+    const result = await fillMedia(first, values["media-url"]);
+    for (const { url, bytes, downloaded } of result.repaired) {
+      console.log(`Filled ${new URL(url).pathname} · ${downloaded} bytes downloaded · ${bytes} bytes total`);
+    }
+    for (const { url, reason } of result.failed) console.warn(`Media incomplete · ${new URL(url).pathname} · ${reason}`);
+    console.log(`Media · ${result.repaired.length} repaired · ${result.failed.length} incomplete`);
+    if (result.failed.length) process.exitCode = 1;
+    return;
+  }
   if (command === "record" && first && second && positionals.length === 3) {
     const url = publicUrl(first);
     if (!url) throw new Error("Use a public HTTP(S) URL without credentials or signed parameters");
@@ -277,9 +294,14 @@ async function main() {
     });
     return;
   }
+  if (command === "repair" && first && positionals.length === 2) {
+    console.log(await writeRepairChecklist(first));
+    return;
+  }
   if (["baseline", "verify"].includes(command) && first && second && positionals.length === 3) {
     const plan = await readVerifyPlan(first, { referenceOnly: command === "baseline" });
     const output = resolve(second);
+    const sourceExport = command === "verify" ? await loadVerificationAssets(plan.sourceExport, plan.reference) : null;
     const executable = values.chrome ?? process.env.CHROME_PATH ?? defaultChrome;
     await mkdir(output);
     const reference = values.baseline === undefined
@@ -294,9 +316,11 @@ async function main() {
       return;
     }
     const candidate = await captureVerificationSide(plan, "candidate", output, executable, values.headless);
-    const summary = await writeVerificationReport(plan, output, reference, candidate);
+    const summary = await writeVerificationReport(plan, output, reference, candidate, sourceExport);
+    const checklist = await writeRepairChecklist(join(output, "verify.json"));
     console.log(`Coverage ${summary.evaluated}/${summary.planned} (${summary.coveragePercent}%) · ${summary.passed} passed · ${summary.failed} failed · ${summary.blocked} blocked`);
     console.log(`Report: ${join(output, "verify.html")}`);
+    console.log(`Repair checklist: ${checklist}`);
     if (summary.passed !== summary.planned) process.exitCode = 1;
     return;
   }

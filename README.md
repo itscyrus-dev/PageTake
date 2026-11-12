@@ -68,7 +68,9 @@ for a selector, or `--scroll manual` to control the browser yourself.
 | `./pagetake score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
 | `./pagetake baseline <plan.json> <new-dir>` | Save the reference frames and observations for verification |
 | `./pagetake verify <plan.json> <new-dir> [--baseline <dir>]` | Compare selected sections and interaction states against a live or saved reference |
-| `./pagetake export <project>` | Export an existing recording into a new `source` directory |
+| `./pagetake repair <verify.json>` | Regenerate the Agent repair checklist from a verification report |
+| `./pagetake fill-media <project>` | Complete recorded audio and video ranges using their public origins |
+| `./pagetake export <project> [version]` | Export an existing recording into a new version directory (default: `source`) |
 | `./pagetake guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
 
 Choose a fresh project name for each capture. Set `PAGETAKE_DIR` to change the
@@ -245,6 +247,38 @@ as evaluated. A missing reference, a reference interaction that could not be
 performed, or a reference assertion failure blocks that state. The command
 writes the report and exits with status 1 if any state failed or was blocked.
 
+### Hand failures back to the coding agent
+
+Every verification writes `repair.md` and a runnable `verify-plan.json`
+beside the report. Give the destination agent that directory and the saved
+baseline. The checklist lists failed and blocked checkpoints by section,
+state, and time, with the available selectors, measured differences, crops,
+and reference keyframes. The JSON carries the full observations, including
+sampled asset URLs and bounded inline SVG evidence. An earlier baseline
+may have no asset observations.
+
+Set optional `sourceExport` in the plan to the PageTake export directory
+relative to the plan file. Observed reference images, backgrounds, posters,
+and SVG resources are linked to exported files where their URLs match the
+export's inventory or local routes. Other observations carry their source
+URLs. Keep the export available when sharing its asset links.
+
+For animated backgrounds, add a section-level `layers` array with named
+`id` and two-sided `selectors` entries. A layer can be inside or outside the
+section. Set `pseudo` to `::before` or `::after` to inspect its generated
+background. The checklist shows observed differences in gradients, masks,
+filters, opacity, transforms, and blend mode. It also records Canvas sizes,
+nearby JSON or WASM resource observations, and video playback times when
+available. Use the crops and original scene evidence for Canvas pixels.
+With `sourceExport` set, a layer can list `referenceFiles` under
+`resources/` to link known dependencies such as its scene and runtime.
+
+The checklist includes a verification command that uses the same saved
+baseline. Run it after the agent changes the candidate and use a fresh
+report directory for each iteration. To regenerate a checklist from
+an existing report, run `./pagetake repair path/to/verify.json`. Older
+reports yield a checklist from their available evidence.
+
 ## Replay and compare
 
 ```sh
@@ -260,9 +294,30 @@ Offline replay loads the original URL through Chrome and fulfills requests
 from the archive. The browser uses a local deny proxy for uncaptured traffic.
 A standalone export uses local routes and needs only Node.js to serve. Export
 contains captured browser resources, which may include compiled JavaScript.
-When a browser requests an uncaptured Next.js image width, the preview can
-serve another recorded width of the same image. This works with existing
+Exports rewrite captured CDN URLs inside streamed Next.js text payloads
+while preserving their decoded lengths. Re-export an older bundle to apply
+changes to the exporter.
+
+When a browser requests an uncaptured Next.js or imageMogr2 thumbnail width,
+the preview can serve another recorded width of the same image. This works with existing
 recordings and keeps image requests local.
+
+If recorded video or audio starts in the middle of a file, complete its
+byte ranges before exporting a new preview:
+
+```sh
+./pagetake fill-media example
+./pagetake export example source-filled
+./pagetake open example source-filled
+```
+
+`fill-media` contacts the recorded public origins once. It requests only
+missing ranges when the recorded strong ETag can verify the response.
+Without that validator it checks a complete download against the recorded
+bytes. Use repeatable `--media-url <URL>` for a specific media request seen
+during recording whose body was never saved. Resources that changed,
+exceed capture limits, or remain unavailable are reported as incomplete.
+The new export serves the completed media from local files.
 
 In a preview, use these query parameters.
 
@@ -290,6 +345,15 @@ comparable frames at a stable scroll position. Match the action plan and
 viewport when using `inspect` against another implementation.
 
 ## Export contents
+
+Export identifies supported animated scene runtimes in the recorded page and
+writes `guide/scenes.md` and `manifest/scenes.json`. Complete portable scenes
+include a mount module, captured runtime, scene configuration, and recorded
+dependencies under `scenes/`. The exported agent manifest links the guide.
+Discovery currently recognizes Unicorn Studio scene initialization. Canvas
+surfaces without a recognized scene are listed as observations, and missing
+scene files or assets appear as evidence gaps. Existing recordings can be
+exported to a fresh directory to generate this guide.
 
 Start with `guide/page.md` for the section map.
 

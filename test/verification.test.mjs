@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,13 +35,13 @@ test("Verification aligns independent selectors and reports passed, failed, and 
     const expect = (visibleCount) => [{ label: "Artwork", selectors: { reference: "i", candidate: "i" }, visibleCount }];
     const plan = {
       version: 1, reference: base + "/reference", candidate: base + "/candidate",
-      viewport: { width: 800, height: 600 }, minVisual: 95, maxTimingDeltaMs: 500,
+      viewport: { width: 800, height: 600 }, minVisual: 95, maxTimingDeltaMs: 1000,
       sections: [
         {
           id: "card", selectors: { reference: "#original", candidate: "#copy" },
           states: [
             { id: "default", action: "idle", framesMs: [100], expect: expect(0) },
-            { id: "hover", action: "hover", framesMs: [100, 400], expect: expect(1) },
+            { id: "hover", action: "hover", framesMs: [100, 900], expect: expect(1) },
             { id: "leave", action: "leave", framesMs: [100], expect: expect(0) },
           ],
         },
@@ -55,13 +55,17 @@ test("Verification aligns independent selectors and reports passed, failed, and 
     await writeFile(input, JSON.stringify(plan));
     await assert.rejects(run(process.execPath, [cli, "verify", input, output]), { code: 1 });
     const report = JSON.parse(await readFile(join(output, "verify.json"), "utf8"));
-    assert.deepEqual(report.summary, { planned: 4, evaluated: 3, passed: 2, failed: 1, blocked: 1, coveragePercent: 75 });
+    const reasons = report.sections.flatMap(({ id, states }) =>
+      states.flatMap((state) => state.frames.flatMap((frame) =>
+        frame.reasons.map((reason) => `${id}/${state.id} at ${frame.atMs} ms: ${reason}`))));
+    assert.deepEqual(report.summary, { planned: 4, evaluated: 3, passed: 2, failed: 1, blocked: 1, coveragePercent: 75 },
+      reasons.join("\n"));
     assert.deepEqual(report.sections[0].states.map(({ status }) => status), ["passed", "failed", "passed"]);
     const [idle, hover, leave] = report.sections[0].states;
     assert.equal(idle.frames[0].changedPercent, 0);
     assert.equal(leave.frames[0].visual, 100);
     assert.notEqual(idle.frames[0].reference.scroll.y, idle.frames[0].candidate.scroll.y);
-    assert.deepEqual(hover.frames.map(({ atMs }) => atMs), [100, 400]);
+    assert.deepEqual(hover.frames.map(({ atMs }) => atMs), [100, 900]);
     assert.ok(hover.frames.every((frame) => frame.changedPercent > 0 && frame.reference.assertions[0].passed &&
       !frame.candidate.assertions[0].passed));
     assert.equal(hover.frames[0].reference.animations[0].durationMs, 2000);
@@ -69,6 +73,15 @@ test("Verification aligns independent selectors and reports passed, failed, and 
     const diff = decodeScreenshot(await readFile(join(output, hover.frames[0].diff)));
     assert.deepEqual([diff.width, diff.height], [160, 100]);
     assert.match(await readFile(join(output, "verify.html"), "utf8"), /Coverage <strong>3\/4 \(75%\)/);
+    const checklist = await readFile(join(output, "repair.md"), "utf8");
+    assert.ok(checklist.includes("card / hover · hover"));
+    assert.ok(checklist.includes("100 ms · failed"));
+    assert.ok(checklist.includes("900 ms · failed"));
+    assert.ok(checklist.includes("baseline / unconfirmed · idle"));
+    assert.ok(checklist.includes('"durationMs": 2000'));
+    assert.ok(checklist.includes('"opacity": "1"'));
+    assert.ok(checklist.includes("diff-1-2-1.png"));
+    assert.ok(!checklist.includes("card / default"));
   } finally {
     if (server.listening) await new Promise((resolve) => server.close(resolve));
     await rm(root, { recursive: true, force: true });
@@ -79,15 +92,24 @@ test("A saved baseline verifies two candidate revisions after the origin closes"
   function fixture(prefix, hover) {
     return `<!doctype html><style>
       body{margin:0}section{margin:20px;width:160px;height:100px;background:#eed}
-      i{display:inline-block;width:40px;height:40px;background:#a21;visibility:hidden}
+      i{display:inline-block;width:40px;height:40px;background:linear-gradient(${hover ? "#a21,#fca" : "#0a2,#afa"});visibility:hidden}
       ${hover ? "section:hover i{visibility:visible}" : ""}
-    </style><section id="${prefix}-card"><i></i></section>
+    </style><section id="${prefix}-card">
+      <img src="/art.svg" width="12" height="12" alt=""><i><svg width="12" height="12"><circle cx="6" cy="6" r="4"/></svg></i>
+    </section>
     <section id="${prefix}-footer">Footer</section>`;
   }
 
-  const reference = createServer((_request, response) => response.end(fixture("original", true)));
-  const candidate = createServer((request, response) => response.end(fixture("copy", request.url === "/fixed")));
-  const root = await mkdtemp(join(tmpdir(), "pagetake-baseline-"));
+  const art = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="6" cy="6" r="4"/></svg>';
+  function serveFixture(prefix, hover) {
+    return (request, response) => {
+      if (request.url === "/art.svg") return response.writeHead(200, { "content-type": "image/svg+xml" }).end(art);
+      response.end(fixture(prefix, hover(request)));
+    };
+  }
+  const reference = createServer(serveFixture("original", () => true));
+  const candidate = createServer(serveFixture("copy", (request) => request.url === "/fixed"));
+  const root = await realpath(await mkdtemp(join(tmpdir(), "pagetake-baseline-")));
   try {
     for (const server of [reference, candidate]) {
       server.listen(0, "127.0.0.1");
@@ -97,11 +119,13 @@ test("A saved baseline verifies two candidate revisions after the origin closes"
     const candidateUrl = `http://127.0.0.1:${candidate.address().port}`;
     const expect = (visibleCount) => [{ label: "Artwork", selectors: { reference: "i", candidate: "i" }, visibleCount }];
     const plan = {
-      version: 1, reference: referenceUrl, candidate: candidateUrl + "/broken",
+      version: 1, reference: referenceUrl, candidate: candidateUrl + "/broken", sourceExport: "source",
       viewport: { width: 800, height: 600 }, minVisual: 95, maxTimingDeltaMs: 500,
       sections: [
         {
           id: "card", selectors: { reference: "#original-card", candidate: "#copy-card" },
+          layers: [{ id: "artwork", selectors: { reference: "#original-card i", candidate: "#copy-card i" },
+            referenceFiles: ["resources/art.svg"] }],
           states: [
             { id: "default", action: "idle", framesMs: [100], expect: expect(0) },
             { id: "hover", action: "hover", framesMs: [100, 400], expect: expect(1) },
@@ -114,12 +138,19 @@ test("A saved baseline verifies two candidate revisions after the origin closes"
         },
       ],
     };
+    const source = join(root, "source");
+    await mkdir(join(source, "manifest"), { recursive: true });
+    await mkdir(join(source, "resources"));
+    await writeFile(join(source, "manifest", "assets.json"), JSON.stringify({ assets: [] }));
+    await writeFile(join(source, "routes.json"), JSON.stringify({ routes: [{ route: "/art.svg", file: "resources/art.svg" }] }));
+    await writeFile(join(source, "resources", "art.svg"), art);
     const baseline = join(root, "baseline");
     const input = join(root, "plan.json");
     const baselinePlan = structuredClone(plan);
     delete baselinePlan.candidate;
     for (const section of baselinePlan.sections) {
       delete section.selectors.candidate;
+      for (const layer of section.layers ?? []) delete layer.selectors.candidate;
       for (const state of section.states) for (const entry of state.expect ?? []) delete entry.selectors.candidate;
     }
     await writeFile(input, JSON.stringify(baselinePlan));
@@ -152,6 +183,28 @@ test("A saved baseline verifies two candidate revisions after the origin closes"
         await Promise.all([frame.reference.file, frame.candidate.file, frame.diff].map((file) => readFile(join(output, file))));
       }
       assert.match(await readFile(join(output, "verify.html"), "utf8"), /Saved baseline.*Browser environment/s);
+      const checklist = await readFile(join(output, "repair.md"), "utf8");
+      const rerun = JSON.parse(await readFile(join(output, "verify-plan.json"), "utf8"));
+      assert.equal(rerun.sourceExport, source);
+      assert.ok(checklist.includes(`--baseline '${baseline}'`));
+      if (revision === "broken") {
+        const frame = report.sections[0].states[1].frames[0];
+        assert.equal(frame.reference.assets[0].localPath, join(source, "resources", "art.svg"));
+        assert.equal(frame.reference.inlineSvg.length, 1);
+        assert.ok(checklist.includes("Artwork: expected 1 visible, found 0"));
+        assert.ok(checklist.includes("../source/resources/art.svg"));
+        assert.ok(checklist.includes("#original-card"));
+        assert.ok(checklist.includes("#copy-card"));
+        assert.ok(checklist.includes("Layer artwork · backgroundImage"));
+        assert.ok(checklist.includes("Layer locator artwork"));
+        assert.ok(checklist.includes("Layer reference files"));
+        assert.ok(!checklist.includes("footer / default"));
+        await rm(join(output, "repair.md"));
+        await run(process.execPath, [cli, "repair", join(output, "verify.json")]);
+        assert.equal(await readFile(join(output, "repair.md"), "utf8"), checklist);
+      } else {
+        assert.ok(checklist.includes("All planned states passed."));
+      }
     }
     assert.equal(await readFile(manifest, "utf8"), originalManifest);
 

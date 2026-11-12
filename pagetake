@@ -17,8 +17,10 @@ const usage = `Usage
   ./pagetake score <project> [version]   Capture and score a preview (default: source)
   ./pagetake baseline <plan> <new-dir>  Save a verification reference
   ./pagetake verify <plan> <new-dir>    Compare states [--baseline <dir>]
+  ./pagetake repair <verify.json>       Regenerate the repair checklist
   ./pagetake ai <project> [version]      Generate a draft with the model from .env
-  ./pagetake export <project>            Export an existing recording
+  ./pagetake fill-media <project>        Complete recorded audio and video ranges
+  ./pagetake export <project> [version]  Export an existing recording
   ./pagetake guide <project> [version]   Generate guides for an existing export
 Projects live in recordings/. Clone scrolls the full page by default.
 Use --scroll manual, --scroll 800:2400, or --scroll "#section" to change it.
@@ -101,6 +103,7 @@ async function main() {
     console.log(usage);
     return;
   }
+  if (command === "repair" && first && !second) return cli("repair", resolve(first));
   if (["baseline", "verify"].includes(command) && first && second) {
     const flags = args.map((arg, index) => args[index - 1] === "--baseline" && !arg.startsWith("--") ? resolve(arg)
       : arg.startsWith("--baseline=") && arg.length > "--baseline=".length ? "--baseline=" + resolve(arg.slice("--baseline=".length))
@@ -118,10 +121,11 @@ async function main() {
     console.log(`Preview: ./pagetake open ${second}\nScore: ./pagetake score ${second}`);
     return;
   }
-  if (!["export", "guide", "open", "score", "ai"].includes(command)) throw new Error(usage);
+  if (!["fill-media", "export", "guide", "open", "score", "ai"].includes(command)) throw new Error(usage);
   const project = join(root, validName(first));
   const reference = join(project, "reference");
-  if (command === "export") return cli("export", reference, join(project, "source"));
+  if (command === "fill-media") return cli("fill-media", reference, ...[second, ...args].filter((value) => value !== undefined));
+  if (command === "export") return cli("export", reference, join(project, validName(second ?? "source")));
   const versionIsOption = second?.startsWith("--");
   const version = validName((versionIsOption ? undefined : second) ?? (command === "ai" ? "draft" : "source"));
   const flags = versionIsOption ? [second, ...args] : args;

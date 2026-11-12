@@ -25,7 +25,7 @@ test("Reject out-of-tree paths and duplicate model files", () => {
 async function fixture(folder) {
   await mkdir(join(folder, "bodies"), { recursive: true });
   const resources = [
-    ["https://test.example/", "text/html", '<title>Demo</title><main><section><h1>Hero</h1><button>Upload</button></section><section><h2>Gallery</h2><video aria-label="Product demo"></video></section></main><script src="https://assets.example/app.js">privateBootstrap()</script>'],
+    ["https://test.example/", "text/html", '<title>Demo</title><main><section><h1>Hero</h1><button>Upload</button></section><section><h2>Gallery</h2><video aria-label="Product demo"></video></section></main><script src="https://assets.example/app.js">privateBootstrap()</script><script>self.__next_f.push([1,"chunk:https:"])</script><script nonce="fixture">self.__next_f.push([1,"//assets.example/app.js"])</script>'],
     ["https://assets.example/app.js", "text/javascript", 'document.title="Animation";'],
   ];
   const responses = [];
@@ -49,6 +49,11 @@ test("Export a standalone project with local aliases for CDN routes", async () =
     const markup = await readFile(join(project.output, "index.html"), "utf8");
     assert.match(markup, /src="\/_w\/2_+\/app\.js"/);
     assert.match(markup, /privateBootstrap\(\)/);
+    const payloads = [...markup.matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)]
+      .map(([, value]) => JSON.parse(value));
+    assert.match(payloads.join(""), /^chunk:\/_w\/2_+\/app\.js$/);
+    assert.deepEqual(payloads.map((value) => Buffer.byteLength(value)),
+      ["chunk:https:", "//assets.example/app.js"].map((value) => Buffer.byteLength(value)));
     assert.ok((await readFile(join(project.output, "serve.mjs"), "utf8")).includes("createServer"));
     const guide = await readFile(join(project.output, "AGENTS.md"), "utf8");
     assert.match(guide, /node serve\.mjs/);

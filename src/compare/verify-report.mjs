@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { compareScreenshots, decodeScreenshot } from "./score.mjs";
 import { escapeHtml } from "./compare.mjs";
 import { encodeRegionPng } from "./region-image.mjs";
+import { resolveLayerFiles, resolveReferenceAssets } from "./verify-assets.mjs";
 
 function align(image, width, height) {
   if (image.width === width && image.height === height) return image;
@@ -132,25 +133,25 @@ function describeEnvironment(reference, candidate) {
   return { differences, rows };
 }
 
-export async function writeVerificationReport(plan, output, reference, candidate) {
+export async function writeVerificationReport(plan, output, reference, candidate, sourceExport) {
   const sections = [];
   const summary = { planned: 0, evaluated: 0, passed: 0, failed: 0, blocked: 0 };
   for (const [i, section] of plan.sections.entries()) {
     const states = [];
-    sections.push({ id: section.id, states });
+    const layerFiles = await resolveLayerFiles(section.layers, sourceExport);
+    sections.push({ id: section.id, selectors: section.selectors, layerFiles, states });
     for (const [j, state] of section.states.entries()) {
       const a = reference.sections[i][j], b = candidate.sections[i][j];
       const frames = [];
       const reasons = [a.error && `Reference: ${a.error}`, b.error && `Candidate: ${b.error}`].filter(Boolean);
       for (const [k, atMs] of state.framesMs.entries()) {
-        frames.push(await compareFrame(plan, output,
-          a.frames[k] ?? { atMs, error: a.error },
-          b.frames[k] ?? { atMs, error: b.error },
+        const referenceFrame = resolveReferenceAssets(a.frames[k] ?? { atMs, error: a.error }, sourceExport);
+        frames.push(await compareFrame(plan, output, referenceFrame, b.frames[k] ?? { atMs, error: b.error },
           `diff-${i + 1}-${j + 1}-${k + 1}.png`));
       }
       const status = frames.some((frame) => frame.status === "blocked") ? "blocked"
         : frames.some((frame) => frame.status === "failed") ? "failed" : "passed";
-      states.push({ id: state.id, action: state.action, status, reasons, frames });
+      states.push({ id: state.id, action: state.action, target: state.target, expect: state.expect, status, reasons, frames });
       summary[status]++;
       summary.planned++;
     }
@@ -163,22 +164,25 @@ export async function writeVerificationReport(plan, output, reference, candidate
   const report = { version: 1, reference: referenceUrl, candidate: candidateUrl, viewport, minVisual, maxSizeDelta,
     maxTimingDeltaMs, reducedMotion: plan.reducedMotion, baseline,
     environment: { reference: reference.environment, candidate: candidate.environment, differences },
-    candidateCapturedAt: candidate.capturedAt, summary, sections };
+    candidateCapturedAt: candidate.capturedAt, planFile: "verify-plan.json",
+    sourceAssets: sourceExport?.manifest, summary, sections };
   const source = baseline.type === "saved"
     ? `Saved baseline · ${escapeHtml(baseline.id)} · ${escapeHtml(baseline.manifest)}`
     : "Live reference";
+  await writeFile(join(output, report.planFile), JSON.stringify(plan, null, 2) + "\n");
   await writeFile(join(output, "verify.json"), JSON.stringify(report, null, 2) + "\n");
   await writeFile(join(output, "verify.html"), `<!doctype html><html lang="en"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1"><title>PageTake verification</title>
     <style>
       *{box-sizing:border-box}body{margin:0;background:#151515;color:#f4f4f4;font:16px/1.5 system-ui,sans-serif}
-      main{max-width:1500px;margin:auto;padding:24px}h1,h2,h3,h4,p{margin:0 0 12px}article,.frame{margin:18px 0;padding:16px;border:1px solid #474747;border-radius:8px}
+      a{color:#a8d4ff}main{max-width:1500px;margin:auto;padding:24px}h1,h2,h3,h4,p{margin:0 0 12px}article,.frame{margin:18px 0;padding:16px;border:1px solid #474747;border-radius:8px}
       .images{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}figure{margin:0}details{margin-bottom:8px}summary{cursor:pointer}img{display:block;max-width:100%;height:auto;margin-top:6px}
       table{border-collapse:collapse;margin:8px 0}th,td{text-align:left;padding:4px 12px;border-bottom:1px solid #474747}
       .passed{color:#80e2a2}.failed{color:#ff9bb6}.blocked{color:#ffd275}p,li{overflow-wrap:anywhere}
       @media(max-width:650px){.images{grid-template-columns:1fr}}
     </style></head><body><main>
     <h1>PageTake verification</h1>
+    <p><a href="repair.md">Repair checklist</a> · <a href="verify-plan.json">Verification plan</a></p>
     <p>Reference · ${escapeHtml(referenceUrl)}<br>Candidate · ${escapeHtml(candidateUrl)}</p>
     <p>Baseline source · ${source}<br>Reference captured · ${escapeHtml(reference.capturedAt)}<br>Candidate captured · ${escapeHtml(candidate.capturedAt)}</p>
     <details${differences.length ? " open" : ""}><summary>Browser environment · ${differences.length} differences</summary>
