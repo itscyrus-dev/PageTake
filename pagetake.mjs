@@ -33,6 +33,7 @@ Options
   --js-motion             Observe JavaScript animation-frame callbacks
   --canvas <selector>     Record a two-second Canvas clip after page sampling
   --reduced-motion        Emulate reduced motion
+  --no-reduced-motion     Emulate no reduced-motion preference
   --output <path>         Replay capture directory or comparison report
   --chrome <path>         Path to the Chrome executable
   --notes <file>          Include design or motion notes in the model prompt
@@ -188,7 +189,7 @@ async function runBrowser({ url, output, values, viewport, offline, configure, f
 }
 
 async function main() {
-  const { values, positionals } = parseArgs({ options, allowPositionals: true });
+  const { values, positionals } = parseArgs({ options, allowPositionals: true, allowNegative: true });
   const [command, first, second] = positionals;
   if (values.help || !command) return console.log(usage);
   if (command === "record" && first && second && positionals.length === 3) {

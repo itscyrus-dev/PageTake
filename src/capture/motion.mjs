@@ -374,8 +374,10 @@ export async function startMotionCapture(page, values) {
     worldName, source: `(${install})(${JSON.stringify({ collector, watch: values.watch })});
       if (globalThis.${collector}) Object.assign(globalThis.${collector}, (${installClipCapture})());`,
   });
-  if (values["reduced-motion"]) {
-    await page.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+  const reducedMotion = values["reduced-motion"];
+  if (reducedMotion !== undefined) {
+    const value = reducedMotion ? "reduce" : "no-preference";
+    await page.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value }] });
   }
   let contextId;
   async function evaluate(method, args = []) {

@@ -67,7 +67,9 @@ async function score(project, reference, version, args) {
   const seconds = manifest.durationSeconds ?? Math.max(2, Math.round(manifest.samples.at(-1).elapsedMs / 1000));
   const positions = manifest.scroll && manifest.scroll !== "manual" ? ["--match", join(reference, "manifest.json")] : [];
   const actionOptions = manifest.actions?.length ? ["--actions", join(reference, "actions.json")] : [];
-  const motionOptions = manifest.motion?.reducedMotion ? ["--reduced-motion"] : [];
+  const reducedMotion = manifest.motion?.reducedMotion;
+  const motionOptions = typeof reducedMotion === "boolean"
+    ? [reducedMotion ? "--reduced-motion" : "--no-reduced-motion"] : [];
   if (manifest.motion?.watchSelector) motionOptions.push("--watch", manifest.motion.watchSelector);
   const preview = await startServer(join(project, version));
   try {

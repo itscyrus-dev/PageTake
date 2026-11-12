@@ -68,7 +68,7 @@ test("Export motion, Canvas clips, and verified states and control preview clock
     const url = `http://127.0.0.1:${server.address().port}/demo?fixture=1`;
     await writeFile(plan, JSON.stringify([{ type: "click", selector: "#tab", durationMs: 800, canvas: "#stage",
       state: "show-panel", expect: { selector: "#tab", attribute: "aria-selected", value: "true" } }]));
-    const browser = ["--headless", "--seconds", "2", "--samples", "1", "--width", "390", "--height", "844"];
+    const browser = ["--headless", "--seconds", "2", "--samples", "1", "--width", "390", "--height", "844", "--no-reduced-motion"];
     await run(process.execPath, [cli, "record", url, recording, ...browser, "--watch", "#meter", "--actions", plan,
       "--js-motion", "--canvas", "#stage"]);
     const capture = await readJson(recording, "manifest.json");

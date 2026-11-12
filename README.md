@@ -51,9 +51,10 @@ existing capture to another directory.
 
 New captures observe CSS and Web Animations timings, SVG geometry, media
 metadata, and semantic component changes. `--watch` samples computed styles,
-geometry, and numeric text for extra elements. `--reduced-motion` emulates
-the system preference. Use another project and viewport to compare mobile or
-reduced-motion behavior.
+geometry, and numeric text for extra elements. Use `--reduced-motion` or
+`--no-reduced-motion` to override the system preference. Scoring reuses the
+recorded preference when available. Use another project and viewport to
+compare mobile or reduced-motion behavior.
 
 `--js-motion` observes top-document `requestAnimationFrame` callbacks while
 preserving their native timestamps. The exported `manifest/js-motion.json`
