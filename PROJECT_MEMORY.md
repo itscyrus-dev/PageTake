@@ -1,6 +1,6 @@
-# Web Replay project memory
+# PageTake project memory
 
-Web Replay is a standalone local tool. The product goal is to capture enough
+PageTake is a standalone local tool. The product goal is to capture enough
 browser evidence to reproduce a public page and then adapt the design to an
 existing frontend. Run commands and consult the schema through the README.
 
@@ -20,7 +20,7 @@ existing frontend. Run commands and consult the schema through the README.
 The local-only `recordings/vidmuse-full` project contains a legacy recording of
 the public Winning Ads page and a separate React reconstruction under
 `source/vidmuse`. The reconstruction is a useful verification fixture. Do
-tool development in Web Replay.
+tool development in PageTake.
 
 A first visit to the Chinese VidMuse page can display an onboarding overlay
 that locks scrolling. Automatic capture recognizes the known dialog and

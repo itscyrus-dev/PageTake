@@ -1,6 +1,6 @@
-# Web Replay
+# PageTake
 
-Web Replay records public pages in Chrome, replays captured responses offline,
+PageTake records public pages in Chrome, replays captured responses offline,
 and exports a standalone preview with screenshots, interaction states, motion
 timelines, and an asset inventory. Use it to inspect how a page works or
 compare an implementation against recorded evidence.
@@ -8,7 +8,7 @@ compare an implementation against recorded evidence.
 ## Requirements
 
 - Node.js 24 or later and Google Chrome.
-- On macOS, Web Replay looks for Chrome in Applications. On Linux, set
+- On macOS, PageTake looks for Chrome in Applications. On Linux, set
   `CHROME_PATH` to your Chrome executable. The `--chrome` option overrides it.
 
 ```sh
@@ -38,7 +38,7 @@ for a selector, or `--scroll manual` to control the browser yourself.
 | `./wr guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
 | `./wr ai <project> [version]` | Generate an independent draft using an API-compatible model |
 
-Choose a fresh project name for each capture. Set `WEB_REPLAY_DIR` to change the
+Choose a fresh project name for each capture. Set `PAGETAKE_DIR` to change the
 local recordings directory. Use the lower-level export command to write an
 existing capture to another directory.
 
@@ -103,10 +103,10 @@ selector. Scroll targets into view before clicking or hovering.
 
 ```sh
 mkdir -p recordings
-node web-replay.mjs record https://example.com/ recordings/reference --seconds 12
-node web-replay.mjs replay recordings/reference --seconds 12 --output recordings/playback
-node web-replay.mjs compare recordings/reference recordings/playback
-node web-replay.mjs export recordings/reference recordings/standalone
+node pagetake.mjs record https://example.com/ recordings/reference --seconds 12
+node pagetake.mjs replay recordings/reference --seconds 12 --output recordings/playback
+node pagetake.mjs compare recordings/reference recordings/playback
+node pagetake.mjs export recordings/reference recordings/standalone
 node recordings/standalone/serve.mjs
 ```
 
@@ -163,7 +163,8 @@ and browser media metadata is available only after it loads.
 ## Generate an editable draft
 
 Copy `.env.example` to `.env` and set the model endpoint, model name, and API
-key locally. Then run `./wr ai example` and `./wr open example draft`.
+key locally using the `PAGETAKE_*` variables. Existing `WEB_REPLAY_*` settings
+are also accepted. Then run `./wr ai example` and `./wr open example draft`.
 `--prompt-only` saves the prompt locally for inspection. The tool sends
 capture evidence to the configured model endpoint only when you request a
 model generation call.
@@ -171,7 +172,7 @@ model generation call.
 Use public pages and fixtures you are authorized to capture. Recording uses a
 fresh Chrome profile and filters recognized authentication and signed
 requests. Captures can still contain public responses and third-party
-materials. The MIT license applies to Web Replay's source code. Review the
+materials. The MIT license applies to PageTake's source code. Review the
 rights for any captured material before sharing it.
 
 ## Contributing and releases
@@ -187,7 +188,8 @@ CI runs the Node.js 24 suite with Chrome on Ubuntu and macOS. See
 To prepare a release, update `package.json` and `package-lock.json` together,
 commit the changes, then push the matching `v<version>` tag to your GitHub
 repository. The release workflow reruns CI, checks the tag against the
-package version, and publishes a source archive with SHA-256 checksums.
-Version 0.2.0 is the current release target.
+package version, and publishes `pagetake-<version>.tar.gz` with a matching
+`.tar.gz.sha256` checksum file. See [GitHub Releases](https://github.com/itscyrus-dev/PageTake/releases)
+for published builds.
 
 [MIT License](LICENSE)

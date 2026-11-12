@@ -65,7 +65,7 @@ export async function compareCaptures(recording, replay, requestedOutput) {
   const network = playback.network;
   await writeFile(output, `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Web Replay comparison</title>
+  <title>PageTake comparison</title>
   <style>
     *{box-sizing:border-box}
     body{margin:0;background:#161616;color:#f1f1f1;font:16px/1.5 system-ui,sans-serif}
@@ -76,7 +76,7 @@ export async function compareCaptures(recording, replay, requestedOutput) {
     figure{margin:0}figcaption{margin-bottom:8px}img{display:block;width:100%;height:auto;border:1px solid #454545;border-radius:8px}
     @media(max-width:700px){.pair{grid-template-columns:1fr}}
   </style></head><body><main>
-  <h1>Web Replay comparison</h1>
+  <h1>PageTake comparison</h1>
   <p>${escapeHtml(original.url)}</p>
   <p>Visual ${scores.visual ?? "unscored"} / 100 · Motion ${scores.motion ?? "unscored"} / 100 · comparable ${scores.comparable} / ${scores.total} frames</p>
   ${network ? `<p>Requests served: ${escapeHtml(network.served)}. Missing: ${escapeHtml(network.missing)}. Blocked: ${escapeHtml(network.blocked)}.</p>` : ""}

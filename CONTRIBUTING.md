@@ -15,7 +15,7 @@ Node and Chrome versions, and a minimal public reproduction when available.
 
 ## Source layout
 
-- `wr`, `web-replay.mjs`, and `serve.mjs` are the entry points.
+- `wr`, `pagetake.mjs`, and `serve.mjs` are the entry points.
 - `src/capture/` contains Chrome integration, network capture, and sampling.
 - `src/export/` writes runnable packages, manifests, and section guides.
 - `src/preview/` contains the standalone server and browser controls.

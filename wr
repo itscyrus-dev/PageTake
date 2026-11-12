@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const tool = dirname(fileURLToPath(import.meta.url));
-const root = resolve(process.env.WEB_REPLAY_DIR ?? join(tool, "recordings"));
+const root = resolve(process.env.PAGETAKE_DIR ?? process.env.WEB_REPLAY_DIR ?? join(tool, "recordings"));
 
 const usage = `Usage
   ./wr --version                  Print the version
@@ -30,7 +30,7 @@ function validName(name) {
 }
 
 function cli(...args) {
-  return run([join(tool, "web-replay.mjs"), ...args]);
+  return run([join(tool, "pagetake.mjs"), ...args]);
 }
 
 async function run(args) {
@@ -120,7 +120,7 @@ async function main() {
   if (command === "score") return score(project, reference, version, flags);
   if (command === "ai") {
     const env = join(tool, ".env");
-    return run([`--env-file-if-exists=${env}`, join(tool, "web-replay.mjs"),
+    return run([`--env-file-if-exists=${env}`, join(tool, "pagetake.mjs"),
       "generate", reference, join(project, version), ...flags]);
   }
 }

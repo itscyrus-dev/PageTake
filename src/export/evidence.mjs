@@ -70,9 +70,9 @@ export async function writeEvidence(recording, output, archive, files) {
     const videos = clips.map((clip) => `<figure><figcaption>${escape(clip.selector)}</figcaption>${
       clip.file ? `<video controls playsinline preload="metadata" src="${clip.file}"></video>` : `<p>${escape(clip.error)}</p>`}</figure>`).join("");
     await writeFile(join(folder, "evidence.html"), `<!doctype html><html lang="en"><meta charset="utf-8">
-      <meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Replay evidence</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1"><title>PageTake evidence</title>
       <style>body{font:16px/1.5 system-ui;max-width:56rem;margin:2rem auto;padding:0 1rem}figure{margin:1rem 0}video{max-width:100%}</style>
-      <h1>Web Replay evidence</h1>
+      <h1>PageTake evidence</h1>
       ${links ? `<h2>Component states</h2><ul>${links}</ul>` : ""}
       ${unavailable.length ? `<p>Unavailable checkpoints: ${unavailable.map(({ state }) => state).join(", ")}.</p>` : ""}
       ${videos ? `<h2>Canvas clips</h2>${videos}` : ""}

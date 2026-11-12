@@ -145,7 +145,7 @@
       });
       stateStatus("ready");
     } catch (error) {
-      stateStatus("unavailable", "Web Replay: " + error.message);
+      stateStatus("unavailable", "PageTake: " + error.message);
     }
   }
 

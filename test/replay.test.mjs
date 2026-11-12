@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 import { publicUrl } from "../src/capture/archive.mjs";
 
 const run = promisify(execFile);
-const cli = new URL("../web-replay.mjs", import.meta.url).pathname;
+const cli = new URL("../pagetake.mjs", import.meta.url).pathname;
 
 test("Credentials and signed URLs are excluded from capture", () => {
   assert.equal(publicUrl("https://example.com/script.js?v=2#test"), "https://example.com/script.js?v=2");

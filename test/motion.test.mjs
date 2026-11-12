@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 import { defaultChrome, launchChrome } from "../src/capture/chrome.mjs";
 
 const run = promisify(execFile);
-const cli = new URL("../web-replay.mjs", import.meta.url).pathname;
+const cli = new URL("../pagetake.mjs", import.meta.url).pathname;
 
 test("Export motion, Canvas clips, and verified states and control preview clocks", { timeout: 60000 }, async () => {
   const markup = `<!doctype html><html><head><title>Motion evidence</title><style>

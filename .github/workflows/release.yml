@@ -25,18 +25,23 @@ jobs:
         with:
           node-version: 24
       - name: Build release archive
+        id: archive
         shell: bash
         run: |
           version="$(node -p 'require("./package.json").version')"
           test "$GITHUB_REF_NAME" = "v$version"
-          git archive --format=tar.gz --prefix="web-replay-$version/" \
-            -o "web-replay-$version.tar.gz" HEAD
-          sha256sum "web-replay-$version.tar.gz" > SHA256SUMS
+          archive="pagetake-$version.tar.gz"
+          checksum="$archive.sha256"
+          git archive --format=tar.gz --prefix="pagetake-$version/" -o "$archive" HEAD
+          sha256sum "$archive" > "$checksum"
+          echo "file=$archive" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.archive.outputs.file }}
+          CHECKSUM: ${{ steps.archive.outputs.checksum }}
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
-            "web-replay-$version.tar.gz" SHA256SUMS
+            --title "PageTake $GITHUB_REF_NAME" "$ARCHIVE" "$CHECKSUM"

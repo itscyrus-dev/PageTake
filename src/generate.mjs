@@ -144,10 +144,10 @@ export async function generateProject(recording, output, values) {
     await writeFile(join(project, "prompt.json"), JSON.stringify(messages, null, 2), { flag: "wx" });
     return project;
   }
-  const model = values.model ?? process.env.WEB_REPLAY_MODEL;
-  const base = values["base-url"] ?? process.env.WEB_REPLAY_BASE_URL;
-  const apiKey = process.env.WEB_REPLAY_API_KEY;
-  if (!model || !base || !apiKey) throw new Error("Set --model, --base-url, and WEB_REPLAY_API_KEY");
+  const model = values.model ?? process.env.PAGETAKE_MODEL ?? process.env.WEB_REPLAY_MODEL;
+  const base = values["base-url"] ?? process.env.PAGETAKE_BASE_URL ?? process.env.WEB_REPLAY_BASE_URL;
+  const apiKey = process.env.PAGETAKE_API_KEY ?? process.env.WEB_REPLAY_API_KEY;
+  if (!model || !base || !apiKey) throw new Error("Set --model, --base-url, and PAGETAKE_API_KEY");
   const response = await fetch(endpoint(base), {
     method: "POST",
     redirect: "error",
