@@ -12,7 +12,7 @@ to your coding agent to implement the design in your own project.
 
 ```sh
 npm ci
-./wr help
+./pagetake help
 ```
 
 ## Capture and hand off to a coding agent
@@ -20,7 +20,7 @@ npm ci
 1. From the PageTake checkout, record the reference.
 
    ```sh
-   ./wr clone https://example.com/ example
+   ./pagetake clone https://example.com/ example
    ```
 
 2. From the destination project, install the PageTake Skill for your agent.
@@ -44,9 +44,9 @@ requirements above.
 ### Preview and capture options
 
 ```sh
-./wr clone https://example.com/ example
-./wr open example
-./wr score example --headless
+./pagetake clone https://example.com/ example
+./pagetake open example
+./pagetake score example --headless
 ```
 
 `clone` scrolls from the top to the bottom over 60 seconds and captures six
@@ -56,11 +56,11 @@ for a selector, or `--scroll manual` to control the browser yourself.
 
 | Command | Result |
 | --- | --- |
-| `./wr clone <URL> <project>` | Capture into `recordings/<project>/reference` and export into `source` |
-| `./wr open <project> [version]` | Serve a preview locally. The default version is `source` |
-| `./wr score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
-| `./wr export <project>` | Export an existing recording into a new `source` directory |
-| `./wr guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
+| `./pagetake clone <URL> <project>` | Capture into `recordings/<project>/reference` and export into `source` |
+| `./pagetake open <project> [version]` | Serve a preview locally. The default version is `source` |
+| `./pagetake score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
+| `./pagetake export <project>` | Export an existing recording into a new `source` directory |
+| `./pagetake guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
 
 Choose a fresh project name for each capture. Set `PAGETAKE_DIR` to change the
 local recordings directory. Use the lower-level export command to write an
@@ -69,7 +69,7 @@ existing capture to another directory.
 ## Capture motion and interactions
 
 ```sh
-./wr clone http://127.0.0.1:8080/ workflow --headless --seconds 12 --samples 4 \
+./pagetake clone http://127.0.0.1:8080/ workflow --headless --seconds 12 --samples 4 \
   --js-motion --watch '#counter,.sticky-panel' --actions actions.json
 ```
 
@@ -188,10 +188,10 @@ and browser media metadata is available only after it loads.
 
 ## Optional model-backed draft
 
-Existing users of `./wr ai example` can set `PAGETAKE_BASE_URL`,
+Existing users of `./pagetake ai example` can set `PAGETAKE_BASE_URL`,
 `PAGETAKE_MODEL`, and `PAGETAKE_API_KEY` in their environment or local `.env`
 file. Existing `WEB_REPLAY_*` settings are also accepted. Open the generated
-draft with `./wr open example draft`.
+draft with `./pagetake open example draft`.
 `--prompt-only` saves the prompt locally for inspection. The tool sends
 capture evidence to the configured model endpoint only when you request a
 model generation call.

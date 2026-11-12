@@ -8,7 +8,7 @@ description: Use PageTake to capture a public web page or consume an existing Pa
 ## Locate the evidence
 
 - If the user provides an export, read `manifest/agent.json`. Resolve its file paths from the export root. For older exports, start with `guide/page.md` and `AGENTS.md`.
-- If the user asks for a new capture, use a PageTake checkout with its dependencies installed, Node.js 24 or later, and Google Chrome. From that checkout run `./wr clone <public-url> <new-project>`; the export is `recordings/<new-project>/source` by default. For a specific section, use `--scroll '#section'` when the selector is known. Use an action plan if the requested state needs a click, hover, or other trigger.
+- If the user asks for a new capture, use a PageTake checkout with its dependencies installed, Node.js 24 or later, and Google Chrome. From that checkout run `./pagetake clone <public-url> <new-project>`; the export is `recordings/<new-project>/source` by default. For a specific section, use `--scroll '#section'` when the selector is known. Use an action plan if the requested state needs a click, hover, or other trigger.
 - Review the requested section in the page map, then read the relevant screenshots, asset inventory, and motion or interaction manifests. Use `manifest/missing.json` and the coverage summary to identify gaps. When needed, run `node serve.mjs` inside the export to inspect the reference or open a verified state link.
 
 ## Implement in the destination
