@@ -20,7 +20,7 @@ npm ci
 Paste this into your coding agent from the destination project and replace
 the placeholders.
 
-> Install the PageTake Skill with `npx skills add itscyrus-dev/PageTake --skill pagetake`, then use PageTake to capture `<public URL>` or open `<export directory>`, implement `<what to recreate>` in this project, and verify it against the capture.
+> Install the PageTake Skill with `npx skills add itscyrus-dev/PageTake --skill pagetake`, use `<public URL or PageTake export directory>` as the reference (set up PageTake to capture the URL if needed), then implement `<what to recreate>` in this project and verify it against the capture.
 
 ### Manual setup and handoff
 
