@@ -9,10 +9,39 @@ const config = await readFile(join(root, "routes.json"), "utf8").then(JSON.parse
   throw error;
 });
 const byRoute = new Map();
+const imageVariants = new Map();
+const localOrigin = "http://127.0.0.1";
+
+function responsiveImage(url) {
+  if (!url.pathname.endsWith("/_next/image")) return null;
+  const params = new URLSearchParams(url.searchParams);
+  const width = Number(params.get("w"));
+  if (!Number.isSafeInteger(width) || width < 1 || !/^\d+$/.test(params.get("w") ?? "") ||
+      params.getAll("w").length !== 1 || params.getAll("url").length !== 1 || !params.get("url")) return null;
+  params.delete("w");
+  params.sort();
+  return { key: url.pathname + "?" + params, width };
+}
 for (const route of config?.routes ?? []) {
   const candidates = byRoute.get(route.route) ?? [];
   candidates.push(route);
   byRoute.set(route.route, candidates);
+
+  if (route.status !== 200 || !route.file || route.range || route.contentRange || !route.type?.startsWith("image/")) continue;
+  const variant = responsiveImage(new URL(route.route, localOrigin));
+  if (!variant) continue;
+  const sizes = imageVariants.get(variant.key) ?? [];
+  sizes.push({ width: variant.width, route });
+  imageVariants.set(variant.key, sizes);
+}
+for (const sizes of imageVariants.values()) sizes.sort((a, b) => a.width - b.width);
+
+function recordedImageVariant(url) {
+  const variant = responsiveImage(url);
+  if (!variant) return undefined;
+  const sizes = imageVariants.get(variant.key);
+  // Prefer enough pixels for the requested size, or the largest capture available.
+  return (sizes?.find(({ width }) => width >= variant.width) ?? sizes?.at(-1))?.route;
 }
 const stateName = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -47,7 +76,7 @@ async function serve(request, response) {
     response.writeHead(405).end();
     return;
   }
-  const url = new URL(request.url, "http://127.0.0.1");
+  const url = new URL(request.url, localOrigin);
   const entry = new URL(config?.entry ?? "/", url.origin);
   const state = url.searchParams.get("state");
   const restore = stateName.test(state ?? "") && state !== entry.searchParams.get("state");
@@ -88,7 +117,7 @@ async function serve(request, response) {
   }
   const candidates = byRoute.get(route) ?? byRoute.get(url.pathname);
   const selected = candidates?.find((item) => item.range === request.headers.range) ??
-    candidates?.find((item) => !item.range) ?? candidates?.[0];
+    candidates?.find((item) => !item.range) ?? candidates?.[0] ?? recordedImageVariant(url);
   if (selected?.location) {
     response.writeHead(selected.status, { location: selected.location }).end();
     return;

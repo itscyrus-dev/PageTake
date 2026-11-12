@@ -66,6 +66,8 @@ for a selector, or `--scroll manual` to control the browser yourself.
 | `./pagetake clone <URL> <project>` | Capture into `recordings/<project>/reference` and export into `source` |
 | `./pagetake open <project> [version]` | Serve a preview locally. The default version is `source` |
 | `./pagetake score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
+| `./pagetake baseline <plan.json> <new-dir>` | Save the reference frames and observations for verification |
+| `./pagetake verify <plan.json> <new-dir> [--baseline <dir>]` | Compare selected sections and interaction states against a live or saved reference |
 | `./pagetake export <project>` | Export an existing recording into a new `source` directory |
 | `./pagetake guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
 
@@ -131,6 +133,118 @@ selector. Scroll targets into view before clicking or hovering.
 - **Evidence viewer.** Open `/manifest/evidence.html` in the export preview
   to follow available state links and play the Canvas clips.
 
+## Verify sections and interaction states
+
+Write a verification plan with a CSS selector for each side of every
+section. The reference can be a live page, staging page, or preview that can
+reproduce the interaction. Start the candidate site before verification.
+
+```sh
+./pagetake verify plan.json recordings/my-project/reports/card-check
+```
+
+```json
+{
+  "version": 1,
+  "reference": "http://127.0.0.1:8080/",
+  "candidate": "http://127.0.0.1:5173/",
+  "viewport": { "width": 1440, "height": 900 },
+  "sections": [
+    {
+      "id": "feature-card",
+      "selectors": { "reference": ".feature", "candidate": "[data-feature-card]" },
+      "states": [
+        { "id": "default", "action": "idle", "framesMs": [300] },
+        {
+          "id": "hover",
+          "action": "hover",
+          "framesMs": [300, 900],
+          "expect": [
+            {
+              "label": "Action icons",
+              "selectors": { "reference": ".actions svg", "candidate": "[data-action-icon]" },
+              "visibleCount": 3
+            }
+          ]
+        },
+        {
+          "id": "leave",
+          "action": "leave",
+          "framesMs": [300],
+          "expect": [
+            {
+              "label": "Action icons",
+              "selectors": { "reference": ".actions svg", "candidate": "[data-action-icon]" },
+              "visibleCount": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+- Section selectors must each match one element that fits inside the
+  configured viewport after scrolling. Run separate plans for desktop and
+  mobile. All captures use Chrome at 1× pixel density.
+- States run in order on the same page. `idle` moves the pointer outside and
+  clears focus inside the section. `hover` and `leave` move the real mouse
+  pointer. `click`, `focus`, and `wait` are also available for same-page
+  flows. Use a two-sided `target` selector pair to act on a descendant.
+- `framesMs` sets increasing capture offsets from the action. Each
+  assertion checks the exact number of visible descendants at every
+  configured offset. Visibility uses CSS opacity, visibility, and geometry.
+  Use the screenshots to compare Canvas pixels and partially clipped art.
+- Plan options include `minVisual` (90), `maxSizeDelta` (4 CSS px),
+  `maxTimingDeltaMs` (100), `readyTimeoutMs` (10000), and
+  `reducedMotion` (false). Set thresholds using repeated reference runs.
+  Chrome opens in the background by default. Pass `--no-headless` to observe
+  the run in a window. Use a section selector that also matches its ready
+  state if the reference initially renders an inactive placeholder.
+
+### Save the reference and verify offline
+
+```sh
+./pagetake baseline plan.json recordings/my-project/card-baseline
+./pagetake verify plan.json recordings/my-project/reports/revision-1 \
+  --baseline recordings/my-project/card-baseline
+# Point the plan's candidate URL and selectors at the next implementation.
+./pagetake verify plan.json recordings/my-project/reports/revision-2 \
+  --baseline recordings/my-project/card-baseline
+```
+
+The baseline command visits the reference once per section and stores PNG
+crops, action observations, checksums, and browser metadata. Its plan may
+omit the candidate URL and candidate selectors. Keep `baseline.json` with
+the PNG files and copy the whole directory to move it. Verification with
+`--baseline` opens only the candidate URL. Reports include their own copies
+of the reference crops.
+
+Candidate URLs, candidate selectors, and scoring tolerances can change
+between runs. The reference URL identifies the baseline, and changing a
+reference selector, action sequence, checkpoint, or assertion requires new
+evidence for the affected states. A different viewport or reduced-motion
+preference also requires a new baseline. Missing screenshots, checksum
+mismatches, and incompatible states are reported as blocked. Baseline
+creation preserves incomplete evidence and exits with status 1 if a state
+was blocked. Capture to a new directory to refresh a baseline explicitly.
+
+The report identifies whether the reference was live or saved and shows the
+capture time. It lists both browser versions, OS and architecture, headless
+mode, viewport, pixel density, and motion preference. Browser and OS
+differences remain visible alongside the scores. Use matching environments
+for repeatable visual comparisons.
+
+Open `verify.html` for aligned local crops, a pixel-difference heat map,
+and a per-state verdict. `verify.json` includes scores, size and timing
+measurements, visibility assertions, and observed CSS/Web Animations
+keyframes for automation. Coverage is
+evaluated states divided by planned states. Passed and failed states count
+as evaluated. A missing reference, a reference interaction that could not be
+performed, or a reference assertion failure blocks that state. The command
+writes the report and exits with status 1 if any state failed or was blocked.
+
 ## Replay and compare
 
 ```sh
@@ -146,6 +260,9 @@ Offline replay loads the original URL through Chrome and fulfills requests
 from the archive. The browser uses a local deny proxy for uncaptured traffic.
 A standalone export uses local routes and needs only Node.js to serve. Export
 contains captured browser resources, which may include compiled JavaScript.
+When a browser requests an uncaptured Next.js image width, the preview can
+serve another recorded width of the same image. This works with existing
+recordings and keeps image requests local.
 
 In a preview, use these query parameters.
 
