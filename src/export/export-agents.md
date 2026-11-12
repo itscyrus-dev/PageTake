@@ -8,6 +8,8 @@ Read that project's instructions and examine its existing components first.
 
 - Run `node serve.mjs` and open the printed loopback address. Set `PORT` to
   change the port.
+- Read [design.md](design.md) for the recorded palette, typography, spacing,
+  and reusable component variants when extending the design to other pages.
 - Start with the [page map](guide/page.md). Its section guides show the DOM
   outline, matching layout measurements, assets, and screenshots.
 - Use the [agent manifest](manifest/agent.json) to locate evidence. Its file

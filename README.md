@@ -42,7 +42,8 @@ the placeholders.
    example, ask it to use PageTake to implement the recorded workflow section
    in the current project and verify it at the recorded viewport. The bundle's
    `manifest/agent.json` points to the evidence. Agents can also use the
-   bundle's `AGENTS.md` and `guide/page.md` directly.
+   bundle's `AGENTS.md` and `guide/page.md` directly. Share the bundle's
+   `design.md` when the agent needs to build additional pages in the same style.
 
 The destination agent uses its own model access. The Skill installs workflow
 instructions. For a new capture, use the PageTake checkout and browser
@@ -75,7 +76,9 @@ for a selector, or `--scroll manual` to control the browser yourself.
 
 Choose a fresh project name for each capture. Set `PAGETAKE_DIR` to change the
 local recordings directory. Use the lower-level export command to write an
-existing capture to another directory.
+existing capture to another directory. Export creates missing destination
+directories automatically. Choose a new version name if the destination
+already exists.
 
 ## Capture motion and interactions
 
@@ -346,6 +349,13 @@ viewport when using `inspect` against another implementation.
 
 ## Export contents
 
+Every export includes `design.md`, a reference for extending the captured
+visual style across pages. It lists observed colors, typography, spacing,
+and component variants, with the recorded viewport and links to evidence.
+The report is generated locally from capture data. For an existing recording,
+run `./pagetake export example source-design` to generate the guide from its
+available samples in a fresh export.
+
 Export identifies supported animated scene runtimes in the recorded page and
 writes `guide/scenes.md` and `manifest/scenes.json`. Complete portable scenes
 include a mount module, captured runtime, scene configuration, and recorded
@@ -360,7 +370,7 @@ Start with `guide/page.md` for the section map.
 | File under `manifest/` | Contents |
 | --- | --- |
 | `agent.json` | Entry points, evidence paths, screenshot indexes, verified states, and capture coverage. Paths are relative to the export root |
-| `page.json` | Capture viewport, browser, and sample positions |
+| `page.json` | Capture viewport, browser, sample positions, and available layout and design measurements |
 | `motion-manifest.json` | CSS and browser animations, keyframes, observed values, and collection limits |
 | `js-motion.json` | Opt-in JavaScript frame activity and watched samples |
 | `interactions.json` | Observed state transitions, actions, and frame indexes |

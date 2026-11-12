@@ -287,6 +287,7 @@ export async function writeGuide(recordingPath, outputPath, { packaged = false, 
     ...(packaged ? [
       "", "## Structured evidence", "",
       "- [Agent manifest](../manifest/agent.json)",
+      "- [Design reference](../design.md)",
       ...(scenes ? ["- [Animated scene integration](scenes.md)"] : []),
       "- [Motion timeline](../manifest/motion-manifest.json) · [Interaction states and action frames](../manifest/interactions.json) · [Computed styles and SVG geometry](../manifest/styles.json)",
       "- [Assets and media](../manifest/assets.json) · [Missing evidence](../manifest/missing.json) · [Viewport and sample positions](../manifest/page.json)",
