@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
+import { responsiveImage } from "./responsive-image.mjs";
 
 const root = resolve(process.argv[2] ?? dirname(resolve(process.argv[1])));
 const port = Number(process.argv[3] ?? process.env.PORT ?? 4178);
@@ -12,23 +13,6 @@ const byRoute = new Map();
 const imageVariants = new Map();
 const localOrigin = "http://127.0.0.1";
 
-function responsiveImage(url) {
-  const thumbnail = /^(\?imageMogr2(?:\/[^/?&#]+)*\/thumbnail\/)([1-9]\d*)x(?=[/&]|$)/.exec(url.search);
-  if (thumbnail) {
-    const [match, prefix, pixels] = thumbnail;
-    const width = Number(pixels);
-    if (!Number.isSafeInteger(width)) return null;
-    return { key: url.pathname + prefix + "{width}x" + url.search.slice(match.length), width };
-  }
-  if (!url.pathname.endsWith("/_next/image")) return null;
-  const params = new URLSearchParams(url.searchParams);
-  const width = Number(params.get("w"));
-  if (!Number.isSafeInteger(width) || width < 1 || !/^\d+$/.test(params.get("w") ?? "") ||
-      params.getAll("w").length !== 1 || params.getAll("url").length !== 1 || !params.get("url")) return null;
-  params.delete("w");
-  params.sort();
-  return { key: url.pathname + "?" + params, width };
-}
 for (const route of config?.routes ?? []) {
   const candidates = byRoute.get(route.route) ?? [];
   candidates.push(route);

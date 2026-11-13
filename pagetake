@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
@@ -12,7 +12,7 @@ const root = resolve(process.env.PAGETAKE_DIR ?? process.env.WEB_REPLAY_DIR ?? j
 
 const usage = `Usage
   ./pagetake --version                  Print the version
-  ./pagetake clone <URL> <project>       Record and export a page
+  ./pagetake clone <URL> <project>       Create or refresh a recorded project
   ./pagetake open <project> [version]    Start the preview (default: source)
   ./pagetake score <project> [version]   Capture and score a preview (default: source)
   ./pagetake baseline <plan> <new-dir>  Save a verification reference
@@ -20,7 +20,8 @@ const usage = `Usage
   ./pagetake repair <verify.json>       Regenerate the repair checklist
   ./pagetake ai <project> [version]      Generate a draft with the model from .env
   ./pagetake fill-media <project>        Complete recorded audio and video ranges
-  ./pagetake export <project> [version]  Export an existing recording
+  ./pagetake export <project> [version] [--no-recover-images]
+                                        Export an existing recording
   ./pagetake guide <project> [version]   Generate guides for an existing export
 Projects live in recordings/. Clone scrolls the full page by default.
 Use --scroll manual, --scroll 800:2400, or --scroll "#section" to change it.
@@ -41,6 +42,63 @@ async function run(args) {
   const child = spawn(process.execPath, args, { stdio: "inherit", cwd: tool });
   const [code, signal] = await once(child, "exit");
   if (code !== 0) throw new Error(`Command exited (${signal ?? code})`);
+}
+
+async function cloneProject(url, name, args) {
+  const project = join(root, name);
+  await mkdir(project, { recursive: true });
+  const work = join(project, ".pagetake-clone");
+  try {
+    await mkdir(work);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    throw new Error(`Clone workspace already exists: ${work}. Another clone may be running or need recovery.`, { cause: error });
+  }
+  const previous = [], installed = [];
+  let keepWorkspace = false;
+  try {
+    const reference = join(work, "reference");
+    const source = join(work, "source");
+    await cli("record", url, reference, "--seconds", "60", "--samples", "6", "--scroll", "full", ...args);
+    await cli("export", reference, source, ...args.filter((arg) => arg === "--no-recover-images"));
+
+    // Carry user-added files (such as a React reconstruction) into the new default export.
+    const oldSource = join(project, "source");
+    const generated = new Set([...await readdir(source), "scenes"]);
+    const oldFiles = await readdir(oldSource).catch((error) => {
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+      return [];
+    });
+    for (const file of oldFiles) {
+      if (!generated.has(file)) await cp(join(oldSource, file), join(source, file), { recursive: true, verbatimSymlinks: true });
+    }
+
+    for (const directory of ["reference", "source"]) {
+      try {
+        await rename(join(project, directory), join(work, directory + "-previous"));
+        previous.push(directory);
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
+    }
+    for (const directory of ["reference", "source"]) {
+      await rename(join(work, directory), join(project, directory));
+      installed.push(directory);
+    }
+  } catch (error) {
+    try {
+      for (const directory of installed) await rename(join(project, directory), join(work, directory));
+      for (const directory of previous) await rename(join(work, directory + "-previous"), join(project, directory));
+    } catch (rollbackError) {
+      keepWorkspace = true;
+      throw new Error(`Clone could not restore the previous files. Recovery files are in ${work}.`,
+        { cause: new AggregateError([error, rollbackError]) });
+    }
+    throw error;
+  } finally {
+    if (!keepWorkspace) await rm(work, { recursive: true, force: true });
+  }
+  console.log(`Preview: ./pagetake open ${name}\nScore: ./pagetake score ${name}`);
 }
 
 async function startServer(project) {
@@ -112,23 +170,16 @@ async function main() {
   }
   if (command === "clone") {
     if (!first || !second) throw new Error("Usage: ./pagetake clone <URL> <project>");
-    const project = join(root, validName(second));
-    const reference = join(project, "reference");
-    await mkdir(root, { recursive: true });
-    await mkdir(project);
-    await cli("record", first, reference, "--seconds", "60", "--samples", "6", "--scroll", "full", ...args);
-    await cli("export", reference, join(project, "source"));
-    console.log(`Preview: ./pagetake open ${second}\nScore: ./pagetake score ${second}`);
-    return;
+    return cloneProject(first, validName(second), args);
   }
   if (!["fill-media", "export", "guide", "open", "score", "ai"].includes(command)) throw new Error(usage);
   const project = join(root, validName(first));
   const reference = join(project, "reference");
   if (command === "fill-media") return cli("fill-media", reference, ...[second, ...args].filter((value) => value !== undefined));
-  if (command === "export") return cli("export", reference, join(project, validName(second ?? "source")));
   const versionIsOption = second?.startsWith("--");
   const version = validName((versionIsOption ? undefined : second) ?? (command === "ai" ? "draft" : "source"));
   const flags = versionIsOption ? [second, ...args] : args;
+  if (command === "export") return cli("export", reference, join(project, version), ...flags);
   if (command === "guide") return cli("guide", reference, join(project, version));
   if (command === "open") return run([join(tool, "serve.mjs"), join(project, version)]);
   if (command === "score") return score(project, reference, version, flags);

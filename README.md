@@ -64,19 +64,24 @@ for a selector, or `--scroll manual` to control the browser yourself.
 
 | Command | Result |
 | --- | --- |
-| `./pagetake clone <URL> <project>` | Capture into `recordings/<project>/reference` and export into `source` |
+| `./pagetake clone <URL> <project>` | Create or refresh a project's `reference` recording and default `source` export |
 | `./pagetake open <project> [version]` | Serve a preview locally. The default version is `source` |
 | `./pagetake score <project> [version]` | Compare with the reference using the recorded viewport, automatic scroll positions, and action plan |
 | `./pagetake baseline <plan.json> <new-dir>` | Save the reference frames and observations for verification |
 | `./pagetake verify <plan.json> <new-dir> [--baseline <dir>]` | Compare selected sections and interaction states against a live or saved reference |
 | `./pagetake repair <verify.json>` | Regenerate the Agent repair checklist from a verification report |
 | `./pagetake fill-media <project>` | Complete recorded audio and video ranges using their public origins |
-| `./pagetake export <project> [version]` | Export an existing recording into a new version directory (default: `source`) |
+| `./pagetake export <project> [version] [--no-recover-images]` | Export an existing recording into a new version directory (default: `source`) |
 | `./pagetake guide <project> [version]` | Add section guides to an existing export without a `guide` directory |
 
-Choose a fresh project name for each capture. Set `PAGETAKE_DIR` to change the
-local recordings directory. Use the lower-level export command to write an
-existing capture to another directory. Export creates missing destination
+Clone creates a missing project directory automatically. Running it again with
+the same name replaces the recording and generated default export after both
+steps succeed. Named exports and custom top-level files in `source` are
+preserved. Restart an open preview after refreshing its export.
+
+Set `PAGETAKE_DIR` to change the local recordings directory. Use the
+lower-level export command to write an existing capture to another directory.
+Export creates missing destination
 directories automatically. Choose a new version name if the destination
 already exists.
 
@@ -305,6 +310,19 @@ When a browser requests an uncaptured Next.js or imageMogr2 thumbnail width,
 the preview can serve another recorded width of the same image. This works with existing
 recordings and keeps image requests local.
 
+Export scans captured HTML and CSS for image references, including `picture`,
+`srcset`, image preloads, posters, and CSS `url()` references with image
+extensions. This also finds assets declared for dark mode and mobile layouts.
+Missing public images are downloaded during export and stored in the bundle.
+Compatible optimizer widths can share one local image. The original recording
+stays intact. Use `--no-recover-images` with `export` or `clone` to skip
+image downloads during export.
+
+Export checks the discovered image routes over HTTP against the local preview
+and reports failures in `manifest/images.json`. The check confirms that each
+verified route serves a nonempty image response. Images created solely by
+runtime JavaScript still depend on what the browser loads during recording.
+
 If recorded video or audio starts in the middle of a file, complete its
 byte ranges before exporting a new preview:
 
@@ -378,6 +396,7 @@ Start with `guide/page.md` for the section map.
 | `canvas-clips.json` | Clip dimensions, timing, WebM files, and capture errors when requested |
 | `styles.json` | Measured styles, boxes, and SVG geometry |
 | `assets.json` and `missing.json` | Asset mapping, hashes, media coverage, and missing evidence |
+| `images.json` | Declared image URLs, recovery results, and local preview checks |
 
 Old captures remain exportable. Their motion manifest is marked `legacy`.
 New runtime evidence requires a fresh capture. Capture only covers loaded
