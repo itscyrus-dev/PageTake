@@ -32,12 +32,13 @@ const usage = `Usage
   node pagetake.mjs verify <plan.json> <new-dir> [--baseline <dir>] [--no-headless] [--chrome <path>]
   node pagetake.mjs repair <verify.json>
   node pagetake.mjs inspect <candidate-URL> <new-dir> [--seconds 20]
-  node pagetake.mjs export <recording-dir> <new-project-dir>
+  node pagetake.mjs export <recording-dir> <new-project-dir> [--no-recover-images]
   node pagetake.mjs guide <recording-dir> <export-dir>
   node pagetake.mjs generate <recording-dir> <new-project-dir> [--base-url URL --model NAME | --prompt-only]
 Options
   --headless              Run Chrome in the background
   --media-url <URL>       Also recover an observed media URL with no recorded bytes
+  --no-recover-images    Export using only recorded resources
   --baseline <dir>        Use a saved reference for verification
   --scroll <range>        full, manual, 800:2400, or a CSS selector
   --samples 3             Number of page samples (maximum 12)
@@ -58,6 +59,7 @@ const options = {
   seconds: { type: "string" }, width: { type: "string" }, height: { type: "string" },
   samples: { type: "string" }, output: { type: "string" }, chrome: { type: "string" },
   headless: { type: "boolean" }, help: { type: "boolean" },
+  "recover-images": { type: "boolean" },
   "base-url": { type: "string" }, model: { type: "string" }, notes: { type: "string" },
   "prompt-only": { type: "boolean" }, feedback: { type: "string" }, candidate: { type: "string" },
   scroll: { type: "string" }, match: { type: "string" },
@@ -287,8 +289,12 @@ async function main() {
     return;
   }
   if (command === "export" && first && second && positionals.length === 3) {
-    const exported = await exportProject(first, second);
+    const exported = await exportProject(first, second, { recover: values["recover-images"] });
     console.log(`Exported ${exported.count} routes. Run node "${join(exported.output, "serve.mjs")}" to preview.`);
+    if (exported.images.total) {
+      const { recovered, verified, total } = exported.images;
+      console.log(`Images: ${verified}/${total} verified locally, ${recovered} recovered. See manifest/images.json.`);
+    }
     return;
   }
   if (command === "guide" && first && second && positionals.length === 3) {

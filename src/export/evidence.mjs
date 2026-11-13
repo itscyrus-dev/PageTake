@@ -29,7 +29,7 @@ function mediaCoverage(entries) {
   return { status: coveredBytes === total ? "all-bytes-in-ranges" : "partial", totalBytes: total, coveredBytes };
 }
 
-export async function writeEvidence(recording, output, archive, files, scenes) {
+export async function writeEvidence(recording, output, archive, files, scenes, images) {
   const folder = join(output, "manifest");
   await mkdir(folder, { recursive: true });
   const motion = archive.motion;
@@ -114,6 +114,7 @@ export async function writeEvidence(recording, output, archive, files, scenes) {
       url: entry.url, status: entry.status, type, requestedRange: entry.range,
       contentRange: header(entry, "content-range"), archiveSha256: entry.body, archiveBytes: entry.bytes,
       localPath: file ?? null, localBytes: file ? (await stat(join(output, file))).size : null,
+      recoveredAtExport: entry.recoveredAtExport,
     };
     assets.push(record);
     if ((observedSources.has(entry.url) || /^(?:video|audio)\//i.test(type)) && file && entry.bytes > 0) {
@@ -154,6 +155,7 @@ export async function writeEvidence(recording, output, archive, files, scenes) {
     }),
     write("styles", { watchSelector: motion?.watchSelector, targets: motion?.styles ?? [] }),
     write("assets", { assets, media, repairs: archive.mediaRepairs }),
+    write("images", { verification: "local-preview-http-head", images }),
     write("missing", {
       networkDetailAvailable: Array.isArray(archive.networkIssues), omissions: archive.omissions,
       network: archive.networkIssues ?? [], networkLimitReached: archive.issueLimitReached,
@@ -174,7 +176,7 @@ export async function writeEvidence(recording, output, archive, files, scenes) {
       },
       evidence: {
         page: "manifest/page.json", motion: "manifest/motion-manifest.json", interactions: "manifest/interactions.json",
-        styles: "manifest/styles.json", assets: "manifest/assets.json", missing: "manifest/missing.json",
+        styles: "manifest/styles.json", assets: "manifest/assets.json", missing: "manifest/missing.json", images: "manifest/images.json",
         ...(scenes ? { scenes: scenes.manifest } : {}),
         ...(states.length ? { states: "manifest/states.json" } : {}),
         ...(clips.length ? { canvasClips: "manifest/canvas-clips.json" } : {}),

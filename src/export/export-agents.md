@@ -16,6 +16,8 @@ Read that project's instructions and examine its existing components first.
   paths are relative to this export directory.
 - Use `routes.json` to map browser requests to files in `resources/`.
   Review the [missing evidence report](manifest/missing.json) for gaps.
+- Use the [image coverage report](manifest/images.json) to see which declared
+  images were recovered during export and verified in the local preview.
 - Check animations and interactions at their recorded positions. Where
   available, the evidence viewer links to Canvas clips, JavaScript frame
   activity, and verified state checkpoints.
